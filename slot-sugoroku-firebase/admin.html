@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理画面 - スロット双六</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="admin-wrap" id="adminLoginView">
+  <div class="admin-card">
+    <div class="modal-header"><h2>🔒 管理者ログイン</h2></div>
+    <form id="adminLoginForm">
+      <div class="field-group">
+        <label>メールアドレス</label>
+        <input type="text" id="adminEmail" autocomplete="username" required>
+      </div>
+      <div class="field-group">
+        <label>パスワード</label>
+        <input type="text" id="adminPassword" autocomplete="current-password" required>
+      </div>
+      <div class="field-hint" id="adminLoginError" style="color:#c62828; margin-bottom:10px;"></div>
+      <button type="submit" class="primary-btn">ログイン</button>
+    </form>
+  </div>
+</div>
+
+<div class="admin-wrap" id="adminDashboardView" style="display:none;">
+  <div class="admin-card">
+    <div class="modal-header">
+      <h2>🛠 管理ダッシュボード</h2>
+      <button class="modal-close-btn" id="adminLogoutBtn" title="ログアウト">⎋</button>
+    </div>
+
+    <div class="admin-tabs">
+      <button class="admin-tab-btn active" data-tab="stats">統計</button>
+      <button class="admin-tab-btn" data-tab="ranking">ランキング</button>
+      <button class="admin-tab-btn" data-tab="password">あいことば管理</button>
+      <button class="admin-tab-btn" data-tab="shop">ショップ管理</button>
+    </div>
+
+    <!-- 統計タブ -->
+    <div data-tab-panel="stats">
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-value" id="statPlayerCount">-</div><div class="stat-label">プレイヤー数</div></div>
+        <div class="stat-card"><div class="stat-value" id="statTotalPlays">-</div><div class="stat-label">総プレイ数</div></div>
+        <div class="stat-card"><div class="stat-value" id="statTotalSpins">-</div><div class="stat-label">総スピン数</div></div>
+        <div class="stat-card"><div class="stat-value" id="statBonusCount">-</div><div class="stat-label">BONUS回数</div></div>
+        <div class="stat-card"><div class="stat-value" id="statSixCount">-</div><div class="stat-label">666回数</div></div>
+        <div class="stat-card"><div class="stat-value" id="statTotalCoins">-</div><div class="stat-label">総獲得コイン</div></div>
+        <div class="stat-card"><div class="stat-value" id="statAchievedCount">-</div><div class="stat-label">解除実績数（上位50名合計）</div></div>
+      </div>
+    </div>
+
+    <!-- ランキングタブ -->
+    <div data-tab-panel="ranking" style="display:none;">
+      <div class="ranking-list" id="adminRankingList"></div>
+    </div>
+
+    <!-- あいことば管理タブ -->
+    <div data-tab-panel="password" style="display:none;">
+      <button class="primary-btn" id="pwAddBtn" style="margin-bottom:14px;">＋ あいことばを追加</button>
+      <div id="passwordList"></div>
+
+      <div id="pwFormPanel" style="display:none; margin-top:16px; border-top:2px solid #dbe9fb; padding-top:14px;">
+        <h3 id="pwFormTitle" style="color:var(--blue-dark);">あいことば追加</h3>
+        <form id="pwForm">
+          <div class="field-group">
+            <label>あいことば</label>
+            <input type="text" id="pwCode" required>
+          </div>
+          <div class="field-group">
+            <label>配布コイン数</label>
+            <input type="number" id="pwCoinAmount" min="0" required>
+          </div>
+          <div class="field-group">
+            <label>付与する称号名（任意）</label>
+            <input type="text" id="pwTitleName" placeholder="例：限定称号ホルダー">
+            <div class="field-hint">入力すると、このあいことばを引き換えたプレイヤーに新しい称号が付与されます（空欄なら称号なし）</div>
+          </div>
+          <div class="field-group">
+            <label>最大利用回数（0 = 無制限）</label>
+            <input type="number" id="pwMaxUses" min="0">
+          </div>
+          <div class="field-group">
+            <label>開始日時</label>
+            <input type="datetime-local" id="pwStartAt">
+          </div>
+          <div class="field-group">
+            <label>終了日時</label>
+            <input type="datetime-local" id="pwEndAt">
+          </div>
+          <div class="field-group">
+            <label><input type="checkbox" id="pwActive" checked style="width:auto;"> 有効にする</label>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button type="submit" class="primary-btn">保存</button>
+            <button type="button" class="primary-btn" id="pwFormCancelBtn" style="background:#ccc; color:#333;">キャンセル</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ショップ管理タブ -->
+    <div data-tab-panel="shop" style="display:none;">
+      <div class="field-hint" style="margin-bottom:14px;">
+        価格やスピン数、名前・説明・有効/無効はここから変更できます。「効果の種類」だけはゲーム内に実装済みの2種類（スコア2倍／ドクロよけ）から選ぶ形式です。
+      </div>
+      <button class="primary-btn" id="shopSeedBtn" style="margin-bottom:10px; background:#e6f0ff; color:var(--blue-dark);">初期アイテムを投入する（未登録の場合のみ）</button>
+      <button class="primary-btn" id="shopAddBtn" style="margin-bottom:14px;">＋ アイテムを追加</button>
+      <div id="shopAdminList"></div>
+
+      <div id="shopFormPanel" style="display:none; margin-top:16px; border-top:2px solid #dbe9fb; padding-top:14px;">
+        <h3 id="shopFormTitle" style="color:var(--blue-dark);">アイテム追加</h3>
+        <form id="shopForm">
+          <div class="field-group">
+            <label>アイコン（絵文字1つ）</label>
+            <input type="text" id="shopIcon" maxlength="4" placeholder="✨" required>
+          </div>
+          <div class="field-group">
+            <label>アイテム名</label>
+            <input type="text" id="shopName" required>
+          </div>
+          <div class="field-group">
+            <label>説明文</label>
+            <input type="text" id="shopDesc" required>
+          </div>
+          <div class="field-group">
+            <label>効果の種類</label>
+            <select id="shopEffectType" required>
+              <option value="scoreBoost">スコア2倍（指定スピン数の間、獲得スコアが2倍）</option>
+              <option value="skullGuard">ドクロよけ（指定スピン数の間、💀が出なくなる）</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label>価格（コイン）</label>
+            <input type="number" id="shopCost" min="0" required>
+          </div>
+          <div class="field-group">
+            <label>持続スピン数</label>
+            <input type="number" id="shopSpins" min="1" required>
+          </div>
+          <div class="field-group" id="shopGuardChanceGroup">
+            <label>ドクロよけ成功率（%）</label>
+            <input type="number" id="shopGuardChance" min="0" max="100" value="70">
+            <div class="field-hint">100%にすると、ルーレット演出なしで即座に防ぎます。1〜99%だとルーレットで成功/失敗を演出してから結果が反映されます。</div>
+          </div>
+          <div class="field-group">
+            <label>表示順（小さい順に並ぶ）</label>
+            <input type="number" id="shopOrder" min="0" value="0">
+          </div>
+          <div class="field-group">
+            <label><input type="checkbox" id="shopEnabled" checked style="width:auto;"> 有効にする（プレイヤーのショップに表示）</label>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button type="submit" class="primary-btn">保存</button>
+            <button type="button" class="primary-btn" id="shopFormCancelBtn" style="background:#ccc; color:#333;">キャンセル</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/admin.js"></script>
+</body>
+</html>
