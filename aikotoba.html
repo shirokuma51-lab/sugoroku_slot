@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>あいことば入力</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  /* このページ専用の簡易レイアウト（ゲーム画面のCSSを流用しつつ独立配置） */
+  body{ display:flex; align-items:center; justify-content:center; min-height:100vh; }
+  .aikotoba-page-box{
+    width:100%; max-width:420px; margin:16px;
+    background: linear-gradient(180deg,#ffffff,var(--panel));
+    border-radius: var(--radius-lg);
+    box-shadow: var(--glossy);
+    padding:26px 22px;
+  }
+  .aikotoba-page-box h1{
+    font-size:18px; color:var(--blue-dark); text-align:center; margin:0 0 4px;
+  }
+  .aikotoba-page-box .sub{
+    text-align:center; font-size:12px; color:#7590b5; margin-bottom:18px;
+  }
+  .result-message{
+    margin-top:14px; text-align:center; font-weight:800; font-size:13px; min-height:18px;
+  }
+  .result-message.success{ color:#1c8a4a; }
+  .result-message.error{ color:var(--red); }
+</style>
+</head>
+<body>
+
+<div class="aikotoba-page-box">
+  <h1>🔑 あいことば入力</h1>
+  <div class="sub">入力したあいことばに応じたコインは、<br>ゲーム画面を開くと自動で反映されます。</div>
+
+  <div class="field-group">
+    <label>あいことば</label>
+    <input type="text" id="aikotobaInput" placeholder="あいことばを入力" autocomplete="off">
+    <div class="field-hint">同じあいことばは1人1回のみ使用できます</div>
+  </div>
+
+  <button class="primary-btn" id="aikotobaSubmitBtn">送信する</button>
+  <div class="result-message" id="resultMessage"></div>
+</div>
+
+<script type="module" src="js/aikotoba-page.js"></script>
+</body>
+</html>
