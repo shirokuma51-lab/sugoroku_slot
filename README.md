@@ -1,1 +1,0 @@
-# sugoroku_slot
