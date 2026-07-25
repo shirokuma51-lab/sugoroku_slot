@@ -252,39 +252,27 @@ html,body{
 }
 @keyframes bulbSpin{ to{ transform: rotate(360deg); } }
 
-/* 筐体画像（cabinet.jpg）を背景にして、その上にリール窓を実寸位置で重ねる */
-.cabinet{
-  position:relative;
-  width:100%;
-  aspect-ratio: 1362 / 1155;
-  background-image: url('../assets/img/ui/cabinet.jpg');
-  background-size: 100% 100%;
-  background-repeat: no-repeat;
-  border-radius: var(--radius-md);
-  overflow:hidden;
-  margin-bottom:10px;
-}
-
 .reels{
-  position:absolute;
-  left:25.0%; right:25.6%; top:38.8%; height:19%;
   display:flex;
-  justify-content:space-between;
-  gap:1.5%;
+  justify-content:center;
+  gap:10px;
+  margin-bottom:14px;
 }
 
-.reel-unit{ flex:1; display:flex; align-items:stretch; }
+.reel-unit{ display:flex; align-items:stretch; }
 
 .reel-window{
-  width:100%;
+  width:84px; height:100px;
   background: linear-gradient(180deg, #f4f7fb, #dfe6ee);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 3px 8px rgba(0,0,0,.18), 0 3px 0 rgba(255,255,255,.5);
+  border: 3px solid var(--yellow);
   display:flex; align-items:center; justify-content:center;
   overflow:hidden;
   position:relative;
 }
 
-.reel-value{ width:62%; height:78%; display:flex; align-items:center; justify-content:center; }
+.reel-value{ width:66%; height:80%; display:flex; align-items:center; justify-content:center; }
 .reel-value img{ width:100%; height:100%; object-fit:contain; filter: drop-shadow(0 2px 2px rgba(0,0,0,.25)); }
 .reel-value .skull-symbol{ font-size:34px; }
 
@@ -326,6 +314,7 @@ html,body{
   width:88px; height:46px;
   font-weight:900; font-size:13px;
   color:#0A3D91;
+  background-color: transparent;
   background-image: url('../assets/img/ui/btn_stop.png');
   background-size:100% 100%;
   background-repeat:no-repeat;
@@ -344,6 +333,7 @@ html,body{
   font-size:19px; font-weight:900; letter-spacing:2px;
   color:#fff;
   text-shadow: 0 2px 2px rgba(0,0,0,.35);
+  background-color: transparent;
   background-image: url('../assets/img/ui/btn_spin.png');
   background-size:100% 100%;
   background-repeat:no-repeat;
@@ -650,6 +640,7 @@ html,body{
 
 /* Responsive */
 @media (max-width: 480px){
+  .reel-window{ width:70px; height:84px; }
   .stop-btn{ width:74px; height:40px; font-size:12px; }
   #spinBtn{ width:170px; height:56px; font-size:16px; }
   .tile{ width:56px; height:64px; }
