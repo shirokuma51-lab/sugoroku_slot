@@ -160,7 +160,7 @@ html,body{
   padding:12px;
   margin-bottom:10px;
 }
-.shop-item-icon{ font-size:28px; flex:none; width:40px; text-align:center; }
+.shop-item-icon{ font-size:28px; flex:none; width:40px; height:40px; text-align:center; display:flex; align-items:center; justify-content:center; }
 .shop-item-body{ flex:1; min-width:0; }
 .shop-item-name{ font-weight:900; font-size:14px; color:var(--blue-dark); }
 .shop-item-chance{
@@ -586,6 +586,27 @@ html,body{
   font-size:14px; font-weight:700; color:var(--text);
 }
 .field-hint{ font-size:11px; color:#7590b5; margin-top:4px; }
+
+/* ===================== 管理画面：アイテムアイコン（絵文字/画像切替） ===================== */
+.icon-mode-tabs{ display:flex; gap:6px; margin-bottom:8px; }
+.icon-mode-tab{
+  flex:1; border:2px solid #cfe0f5; background:#fff; color:#3a5a8a;
+  font-weight:800; font-size:13px; padding:8px 0; border-radius:8px; cursor:pointer;
+}
+.icon-mode-tab.active{
+  background: var(--blue-dark); border-color: var(--blue-dark); color:#fff;
+}
+.icon-dropzone{
+  border:2px dashed #a9c6ea; border-radius:10px;
+  min-height:100px;
+  display:flex; align-items:center; justify-content:center; flex-direction:column;
+  text-align:center; padding:10px; cursor:pointer;
+  color:#5c7ba3; font-size:13px;
+  background:#f7fafd;
+  transition: background .15s ease, border-color .15s ease;
+}
+.icon-dropzone.dragover{ background:#e6f0ff; border-color: var(--blue-dark); }
+.icon-dropzone img{ max-width:80px; max-height:80px; border-radius:8px; margin-bottom:6px; object-fit:contain; }
 
 .primary-btn{
   border:none; cursor:pointer; width:100%;

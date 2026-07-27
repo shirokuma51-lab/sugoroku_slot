@@ -5,7 +5,10 @@
 //   shopItems/{itemId}
 //     name        : string   （表示名。例：「スコア2倍チケット」）
 //     desc        : string   （説明文。例：「次の5回のスピンで獲得スコアが2倍になる」）
-//     icon        : string   （絵文字1つ。例：「✨」）
+//     iconType    : 'emoji' | 'image'
+//     icon        : string   （iconType==='emoji'の時に使う絵文字1つ。例：「✨」）
+//     iconImage   : string|null （iconType==='image'の時に使うdataURL。管理画面で
+//                                 ドラッグ&ドロップ/ファイル選択した画像を縮小・base64化したもの）
 //     cost        : number   （購入に必要なコイン数）
 //     spins       : number   （効果が持続するスピン回数）
 //     effectType  : 'scoreBoost' | 'skullGuard'
@@ -38,10 +41,13 @@ export function subscribeShopCatalog(callback){
 }
 
 export async function createShopItem(data){
+  const iconType = data.iconType === 'image' ? 'image' : 'emoji';
   const docRef = await addDoc(collection(db, 'shopItems'), {
     name: data.name || '',
     desc: data.desc || '',
-    icon: data.icon || '🎁',
+    iconType,
+    icon: iconType === 'emoji' ? (data.icon || '🎁') : '',
+    iconImage: iconType === 'image' ? (data.iconImage || null) : null,
     cost: Number(data.cost) || 0,
     spins: Number(data.spins) || 1,
     effectType: data.effectType,
@@ -64,6 +70,13 @@ export async function updateShopItem(id, data){
   } else if(payload.effectType){
     payload.guardChance = null;
   }
+  if(payload.iconType === 'image'){
+    payload.icon = '';
+    payload.iconImage = payload.iconImage || null;
+  } else if(payload.iconType === 'emoji'){
+    payload.iconImage = null;
+    payload.icon = payload.icon || '🎁';
+  }
   await updateDoc(doc(db, 'shopItems', id), payload);
 }
 
@@ -78,11 +91,11 @@ export async function seedDefaultShopItemsIfEmpty(){
 
   await createShopItem({
     name: 'スコア2倍チケット', desc: '次の5回のスピンで獲得スコアが2倍になる',
-    icon: '✨', cost: 30, spins: 5, effectType: 'scoreBoost', enabled: true, order: 1,
+    iconType:'emoji', icon: '✨', cost: 30, spins: 5, effectType: 'scoreBoost', enabled: true, order: 1,
   });
   await createShopItem({
     name: 'ドクロよけのお守り', desc: '次の5回のスピンの間、70%の確率で💀を防ぐ',
-    icon: '🛡️', cost: 40, spins: 5, effectType: 'skullGuard', guardChance: 70, enabled: true, order: 2,
+    iconType:'emoji', icon: '🛡️', cost: 40, spins: 5, effectType: 'skullGuard', guardChance: 70, enabled: true, order: 2,
   });
   return true;
 }

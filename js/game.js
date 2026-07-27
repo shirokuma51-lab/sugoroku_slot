@@ -368,7 +368,7 @@ export const Game = (function(){
       el.roulette.resultText.textContent = '';
       el.roulette.resultText.className = 'roulette-result';
       el.roulette.needle.style.transition = 'none';
-      el.roulette.needle.style.transform = 'rotate(0deg)';
+      el.roulette.needle.style.transform = 'translate(-50%,-100%) rotate(0deg)';
       el.roulette.overlay.classList.add('active');
       // 強制リフローしてから transition を再度有効化しないと、0degへのリセットがアニメーションされてしまう
       void el.roulette.needle.offsetHeight;
@@ -378,7 +378,9 @@ export const Game = (function(){
       Sound.spinTick();
 
       requestAnimationFrame(()=>{
-        el.roulette.needle.style.transform = `rotate(${totalDeg}deg)`;
+        // translate(-50%,-100%) は針の付け根をダイヤル中心に固定するための位置合わせ。
+        // rotate側だけを書き換えるとこのtranslateが消えて回転軸がズレるため、必ず両方セットで指定する。
+        el.roulette.needle.style.transform = `translate(-50%,-100%) rotate(${totalDeg}deg)`;
       });
 
       const onEnd = ()=>{

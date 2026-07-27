@@ -115,8 +115,27 @@
         <h3 id="shopFormTitle" style="color:var(--blue-dark);">アイテム追加</h3>
         <form id="shopForm">
           <div class="field-group">
-            <label>アイコン（絵文字1つ）</label>
-            <input type="text" id="shopIcon" maxlength="4" placeholder="✨" required>
+            <label>アイコン</label>
+            <div class="icon-mode-tabs">
+              <button type="button" class="icon-mode-tab active" id="iconModeEmojiBtn">絵文字</button>
+              <button type="button" class="icon-mode-tab" id="iconModeImageBtn">画像</button>
+            </div>
+
+            <div id="iconEmojiPanel">
+              <input type="text" id="shopIcon" maxlength="4" placeholder="✨">
+            </div>
+
+            <div id="iconImagePanel" style="display:none;">
+              <div class="icon-dropzone" id="iconDropzone">
+                <img id="iconImagePreview" style="display:none;">
+                <div id="iconDropzoneHint">
+                  画像をドラッグ&ドロップ<br>
+                  <span style="font-size:11px; opacity:.7;">またはタップして選択（PNG / JPG / WebP）</span>
+                </div>
+              </div>
+              <input type="file" id="shopIconFile" accept="image/png,image/jpeg,image/webp" style="display:none;">
+              <div class="field-hint" id="iconImageError" style="color:#c0392b; display:none;"></div>
+            </div>
           </div>
           <div class="field-group">
             <label>アイテム名</label>

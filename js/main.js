@@ -299,7 +299,7 @@ function renderShopList(list){
 
   container.innerHTML = enabledItems.map(item=>`
     <div class="shop-item">
-      <div class="shop-item-icon">${escapeHtml(item.icon || '🎁')}</div>
+      <div class="shop-item-icon">${item.iconType==='image' && item.iconImage ? `<img src="${item.iconImage}" alt="" style="width:100%;height:100%;object-fit:contain;">` : escapeHtml(item.icon || '🎁')}</div>
       <div class="shop-item-body">
         <div class="shop-item-name">${escapeHtml(item.name || '')}
           ${item.effectType==='skullGuard' && item.guardChance!=null ? `<span class="shop-item-chance">成功率${item.guardChance}%</span>` : ''}

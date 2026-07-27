@@ -218,6 +218,8 @@ async function onPasswordFormSubmit(e){
 ============================================================ */
 let lastShopList = [];
 let editingShopId = null;
+let iconMode = 'emoji';       // 'emoji' | 'image'
+let currentIconImageDataUrl = null; // 画像モード時に選択中のdataURL（未選択ならnull）
 
 function initShopPanel(){
   const unsub = subscribeShopCatalog((list)=>{
@@ -234,6 +236,9 @@ function initShopPanel(){
     const created = await seedDefaultShopItemsIfEmpty();
     showToast(created ? '初期アイテムを追加しました' : 'すでにアイテムが登録されているためスキップしました');
   });
+
+  initIconModeTabs();
+  initIconDropzone();
 }
 
 function updateGuardChanceVisibility(){
@@ -241,12 +246,116 @@ function updateGuardChanceVisibility(){
   document.getElementById('shopGuardChanceGroup').style.display = isSkullGuard ? '' : 'none';
 }
 
+/* ---------- アイコン：絵文字/画像の切り替えタブ ---------- */
+function initIconModeTabs(){
+  const emojiBtn = document.getElementById('iconModeEmojiBtn');
+  const imageBtn = document.getElementById('iconModeImageBtn');
+  emojiBtn.addEventListener('click', ()=> setIconMode('emoji'));
+  imageBtn.addEventListener('click', ()=> setIconMode('image'));
+}
+
+function setIconMode(mode){
+  iconMode = mode;
+  document.getElementById('iconModeEmojiBtn').classList.toggle('active', mode==='emoji');
+  document.getElementById('iconModeImageBtn').classList.toggle('active', mode==='image');
+  document.getElementById('iconEmojiPanel').style.display = mode==='emoji' ? '' : 'none';
+  document.getElementById('iconImagePanel').style.display = mode==='image' ? '' : 'none';
+}
+
+/* ---------- アイコン：画像のドラッグ&ドロップ／ファイル選択 ---------- */
+const ACCEPTED_ICON_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+const ICON_MAX_DIM = 128; // 保存前に縮小する最大辺(px)。Firestoreドキュメントを軽量に保つため
+
+function initIconDropzone(){
+  const dropzone = document.getElementById('iconDropzone');
+  const fileInput = document.getElementById('shopIconFile');
+
+  // タップ/クリックでファイル選択ダイアログを開く（スマホでも写真選択ができる）
+  dropzone.addEventListener('click', ()=> fileInput.click());
+
+  fileInput.addEventListener('change', ()=>{
+    if(fileInput.files && fileInput.files[0]) handleIconFile(fileInput.files[0]);
+  });
+
+  ['dragenter','dragover'].forEach(evt=>{
+    dropzone.addEventListener(evt, (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      dropzone.classList.add('dragover');
+    });
+  });
+  ['dragleave','drop'].forEach(evt=>{
+    dropzone.addEventListener(evt, (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      dropzone.classList.remove('dragover');
+    });
+  });
+  dropzone.addEventListener('drop', (e)=>{
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if(file) handleIconFile(file);
+  });
+}
+
+function showIconImageError(msg){
+  const errEl = document.getElementById('iconImageError');
+  errEl.textContent = msg;
+  errEl.style.display = msg ? '' : 'none';
+}
+
+function handleIconFile(file){
+  showIconImageError('');
+  if(!ACCEPTED_ICON_TYPES.includes(file.type)){
+    showIconImageError('対応していないファイル形式です（PNG / JPG / WebPのみ）');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onerror = ()=> showIconImageError('画像の読み込みに失敗しました');
+  reader.onload = ()=>{
+    resizeImageDataUrl(reader.result, ICON_MAX_DIM).then(dataUrl=>{
+      currentIconImageDataUrl = dataUrl;
+      const preview = document.getElementById('iconImagePreview');
+      preview.src = dataUrl;
+      preview.style.display = '';
+      document.getElementById('iconDropzoneHint').style.display = 'none';
+    }).catch(()=> showIconImageError('画像の処理に失敗しました'));
+  };
+  reader.readAsDataURL(file);
+}
+
+/** 画像を正方形の枠に収まるよう縮小し、JPEGのdataURLとして返す（Firestoreに軽量に保存するため）。 */
+function resizeImageDataUrl(srcDataUrl, maxDim){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = reject;
+    img.src = srcDataUrl;
+  });
+}
+
+function resetIconImagePanel(){
+  currentIconImageDataUrl = null;
+  const preview = document.getElementById('iconImagePreview');
+  preview.src = '';
+  preview.style.display = 'none';
+  document.getElementById('iconDropzoneHint').style.display = '';
+  document.getElementById('shopIconFile').value = '';
+  showIconImageError('');
+}
+
 function renderShopAdminList(list){
   const container = document.getElementById('shopAdminList');
   container.innerHTML = list.map(item=>`
     <div class="password-row" data-id="${item.id}">
       <div class="password-row-main">
-        <strong>${escapeHtml(item.icon||'')} ${escapeHtml(item.name||'')}</strong>
+        <strong>${item.iconType==='image' && item.iconImage ? `<img src="${item.iconImage}" style="width:20px;height:20px;object-fit:contain;vertical-align:middle;border-radius:4px;">` : escapeHtml(item.icon||'')} ${escapeHtml(item.name||'')}</strong>
         <span>${item.cost}コイン / ${item.spins}スピン${item.effectType==='skullGuard' && item.guardChance!=null ? ` / 成功率${item.guardChance}%` : ''}</span>
         <span class="badge-active">${escapeHtml(EFFECT_TYPES[item.effectType]?.label.split('（')[0] || item.effectType)}</span>
         <span class="${item.enabled ? 'badge-active':'badge-inactive'}">${item.enabled ? '有効':'無効'}</span>
@@ -273,7 +382,6 @@ function renderShopAdminList(list){
 function openShopForm(item){
   editingShopId = item ? item.id : null;
   document.getElementById('shopFormTitle').textContent = item ? 'アイテム編集' : 'アイテム追加';
-  document.getElementById('shopIcon').value = item ? item.icon : '✨';
   document.getElementById('shopName').value = item ? item.name : '';
   document.getElementById('shopDesc').value = item ? item.desc : '';
   document.getElementById('shopEffectType').value = item ? item.effectType : 'scoreBoost';
@@ -282,6 +390,20 @@ function openShopForm(item){
   document.getElementById('shopGuardChance').value = item && item.guardChance != null ? item.guardChance : 70;
   document.getElementById('shopOrder').value = item ? (item.order||0) : (lastShopList.length);
   document.getElementById('shopEnabled').checked = item ? !!item.enabled : true;
+
+  resetIconImagePanel();
+  if(item && item.iconType === 'image' && item.iconImage){
+    setIconMode('image');
+    currentIconImageDataUrl = item.iconImage;
+    const preview = document.getElementById('iconImagePreview');
+    preview.src = item.iconImage;
+    preview.style.display = '';
+    document.getElementById('iconDropzoneHint').style.display = 'none';
+  } else {
+    setIconMode('emoji');
+    document.getElementById('shopIcon').value = item ? (item.icon || '✨') : '✨';
+  }
+
   document.getElementById('shopFormPanel').style.display = '';
   updateGuardChanceVisibility();
 }
@@ -289,12 +411,18 @@ function openShopForm(item){
 function closeShopForm(){
   document.getElementById('shopFormPanel').style.display = 'none';
   editingShopId = null;
+  resetIconImagePanel();
 }
 
 async function onShopFormSubmit(e){
   e.preventDefault();
+
+  if(iconMode === 'image' && !currentIconImageDataUrl){
+    showIconImageError('画像を選択してください（またはタブを「絵文字」に切り替えてください）');
+    return;
+  }
+
   const payload = {
-    icon: document.getElementById('shopIcon').value,
     name: document.getElementById('shopName').value,
     desc: document.getElementById('shopDesc').value,
     effectType: document.getElementById('shopEffectType').value,
@@ -303,6 +431,9 @@ async function onShopFormSubmit(e){
     guardChance: document.getElementById('shopGuardChance').value,
     order: document.getElementById('shopOrder').value,
     enabled: document.getElementById('shopEnabled').checked,
+    iconType: iconMode,
+    icon: iconMode === 'emoji' ? document.getElementById('shopIcon').value : '',
+    iconImage: iconMode === 'image' ? currentIconImageDataUrl : null,
   };
 
   try{
