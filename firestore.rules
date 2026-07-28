@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn(){
+      return request.auth != null;
+    }
+    function isOwner(uid){
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    function isAdmin(){
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // ---------------------------------------------------------
+    // players/{uid} — プロフィール（ランキング表示のため全員readできる）
+    // ---------------------------------------------------------
+    match /players/{uid} {
+      allow read: if true;
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid)
+        && request.resource.data.username is string
+        && request.resource.data.username.size() <= 12;
+      allow delete: if false;
+
+      // ・あいことば使用済みフラグはトップレベルに持たない
+      //   （password.js は passwords/{id}/redemptions/{uid} サブコレクションで一意性を担保）
+      // ・pendingCoins（未受取コイン）の増減も本人のみ許可されたupdateに含まれる
+      //   （password.js の引き換え処理／profile.js の claimPendingCoins が対象）
+    }
+
+    // ---------------------------------------------------------
+    // statistics/global — グローバル統計
+    // 注意：クライアントのみの構成のためinc改ざんの理論的リスクは残る。
+    //       厳密に守る場合はCloud Functions経由の書き込みに変更すること。
+    // ---------------------------------------------------------
+    match /statistics/global {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // ---------------------------------------------------------
+    // passwords/{id} — あいことば設定
+    //   ・一覧取得(list)は禁止し、コード一致の単発クエリ(get相当)のみ許可したいが
+    //     Firestoreのセキュリティルールはクエリ自体を条件分岐できないため、
+    //     実運用では「一覧を返さない」ことをクライアント実装側で徹底し、
+    //     可能であればCloud Functions化を推奨する。
+    // ---------------------------------------------------------
+    match /passwords/{pwId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isAdmin();
+
+      // 通常のプレイヤーは「引き換え時に currentUses を1だけ増やす」更新のみ許可。
+      // それ以外のフィールド変更（コイン額・有効期限など）は管理者のみ。
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentUses']) &&
+        request.resource.data.currentUses == resource.data.currentUses + 1
+      );
+
+      match /redemptions/{uid} {
+        allow read: if isOwner(uid) || isAdmin();
+        allow create: if isOwner(uid);
+        allow update, delete: if false;
+      }
+    }
+
+    // ---------------------------------------------------------
+    // titles/{titleId} — 称号の定義（あいことば経由で管理者が作成）
+    //   全員が名前解決のためreadできる必要がある（ランキング等での表示のため）。
+    //   作成・編集は管理者のみ（password.js の createPassword/updatePassword経由）。
+    // ---------------------------------------------------------
+    match /titles/{titleId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ---------------------------------------------------------
+    // admins/{uid} — 管理者フラグ（Firebaseコンソールから手動作成のみ）
+    // ---------------------------------------------------------
+    match /admins/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
+    // ---------------------------------------------------------
+    // gameSettings/{docId} — ゲーム設定・イベントマス設定（将来の拡張用）
+    // ---------------------------------------------------------
+    match /gameSettings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
