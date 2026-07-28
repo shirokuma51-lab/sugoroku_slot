@@ -128,68 +128,9 @@ html,body{
 #resetBtn{ background: linear-gradient(180deg,#ffffff,#ffe9e9); color:#c62828; }
 #profileBtn{ background: linear-gradient(180deg,#ffffff,#e6f0ff); color:var(--blue-dark); }
 #rankingBtn{ background: linear-gradient(180deg,#fff6cf,var(--yellow)); color:#5c3400; }
-#shopBtn{ background: linear-gradient(180deg,#ffe9fb,#ffc9ee); color:#9c1a7a; }
 #aikotobaBtn{ background: linear-gradient(180deg,#eafff0,#c9ffd9); color:#146c2e; }
 
 .hud-actions button:active, #resetBtn:active{ box-shadow: var(--glossy-pressed); transform: translateY(1px); }
-
-/* ===================== EFFECT BADGES（ショップ効果の残り回数表示） ===================== */
-.effect-badges{
-  width:100%; max-width:520px;
-  display:flex; gap:6px; flex-wrap:wrap;
-  margin-top:8px;
-}
-.effect-badges:not(.has-badges){ display:none; }
-.effect-badge{
-  font-size:11px; font-weight:800;
-  padding:5px 10px;
-  border-radius:999px;
-  color:#fff;
-  box-shadow: 0 2px 4px rgba(0,0,0,.25);
-  white-space:nowrap;
-}
-.effect-badge.effect-score{ background: linear-gradient(180deg,#ff8fd0,#e83d9c); }
-.effect-badge.effect-guard{ background: linear-gradient(180deg,#7fd7ff,#2f8bd8); }
-
-/* ===================== SHOP ===================== */
-.shop-item{
-  display:flex; align-items:center; gap:10px;
-  background: linear-gradient(180deg,#ffffff,#f3f7fc);
-  border-radius: var(--radius-md);
-  box-shadow: var(--glossy);
-  padding:12px;
-  margin-bottom:10px;
-}
-.shop-item-icon{ font-size:28px; flex:none; width:40px; height:40px; text-align:center; display:flex; align-items:center; justify-content:center; }
-.shop-item-body{ flex:1; min-width:0; }
-.shop-item-name{ font-weight:900; font-size:14px; color:var(--blue-dark); }
-.shop-item-chance{
-  display:inline-block; margin-left:6px;
-  font-size:10px; font-weight:800; color:#146c2e;
-  background:#eafff0; border-radius:999px; padding:2px 7px;
-  vertical-align:middle;
-}
-.shop-item-desc{ font-size:11px; color:#6b85a5; margin-top:2px; }
-.shop-buy-btn{
-  border:none; cursor:pointer; flex:none;
-  display:flex; align-items:center; gap:4px;
-  background: linear-gradient(180deg,#fff6cf,var(--yellow));
-  color:#5c3400; font-weight:900; font-size:14px;
-  padding:9px 14px;
-  border-radius: var(--radius-sm);
-  box-shadow: var(--glossy);
-}
-.shop-buy-btn:disabled{ opacity:.4; cursor:default; }
-.shop-buy-btn:active:not(:disabled){ box-shadow: var(--glossy-pressed); transform: translateY(1px); }
-.coin-icon-sm{
-  width:16px;height:16px;border-radius:50%;
-  background: radial-gradient(circle at 35% 30%, #fff6cf, var(--yellow) 55%, var(--yellow-dark) 100%);
-  box-shadow: 0 1px 2px rgba(0,0,0,.25), inset 0 0 0 1.5px rgba(255,255,255,.5);
-  display:inline-flex;align-items:center;justify-content:center;
-  font-size:9px; color:#8a5a00; font-weight:900;
-  flex:none;
-}
-.coin-icon-sm::after{ content:"C"; }
 
 /* ===================== LUCKY METER ===================== */
 .lucky-meter-wrap{
@@ -233,7 +174,7 @@ html,body{
   margin-top:14px;
   width:100%;
   max-width:520px;
-  background: linear-gradient(180deg, #2f7dff 0%, #0A3D91 100%);
+  background: linear-gradient(180deg, #ffffff 0%, var(--panel) 100%);
   border-radius: var(--radius-lg);
   box-shadow: var(--glossy);
   padding:18px 16px 20px;
@@ -259,23 +200,25 @@ html,body{
   margin-bottom:14px;
 }
 
-.reel-unit{ display:flex; align-items:stretch; }
+.reel-unit{ display:flex; flex-direction:column; align-items:center; gap:8px; }
 
 .reel-window{
-  width:84px; height:100px;
-  background: linear-gradient(180deg, #f4f7fb, #dfe6ee);
+  width:78px; height:92px;
+  background: linear-gradient(180deg, #0B2545, #16345f);
   border-radius: var(--radius-md);
-  box-shadow: inset 0 3px 8px rgba(0,0,0,.18), 0 3px 0 rgba(255,255,255,.5);
-  border: 3px solid var(--yellow);
+  box-shadow: inset 0 4px 10px rgba(0,0,0,.6), 0 3px 0 rgba(255,255,255,.4);
   display:flex; align-items:center; justify-content:center;
   overflow:hidden;
   position:relative;
+  border: 3px solid var(--blue-dark);
 }
 
-.reel-value{ width:66%; height:80%; display:flex; align-items:center; justify-content:center; }
-.reel-value img{ width:100%; height:100%; object-fit:contain; filter: drop-shadow(0 2px 2px rgba(0,0,0,.25)); }
-.reel-value .skull-symbol{ font-size:34px; }
-
+.reel-value{
+  font-size:44px;
+  font-weight:900;
+  color:#fff;
+  text-shadow: 0 2px 3px rgba(0,0,0,.4);
+}
 .reel-window.spinning .reel-value{ filter: blur(2px); }
 .reel-window.landed .reel-value{ animation: bounceLand .35s ease; }
 @keyframes bounceLand{
@@ -284,15 +227,15 @@ html,body{
   100%{ transform: translateY(0) scale(1); }
 }
 .reel-window.glow{
-  box-shadow: inset 0 0 0 3px var(--yellow), 0 0 18px 6px rgba(255,210,63,.9);
+  box-shadow: inset 0 4px 10px rgba(0,0,0,.6), 0 0 18px 6px rgba(255,210,63,.9);
 }
 .reel-window.skull{
-  box-shadow: inset 0 0 0 3px #ff5252;
+  border-color:#ff5252;
   animation: skullPulse .5s ease infinite alternate;
 }
 @keyframes skullPulse{
-  from{ box-shadow: inset 0 0 0 3px #ff5252, 0 0 10px 3px rgba(255,82,82,.6); }
-  to{ box-shadow: inset 0 0 0 3px #ff5252, 0 0 26px 10px rgba(255,82,82,.95); }
+  from{ box-shadow: inset 0 4px 10px rgba(0,0,0,.6), 0 0 10px 3px rgba(255,82,82,.6); }
+  to{ box-shadow: inset 0 4px 10px rgba(0,0,0,.6), 0 0 26px 10px rgba(255,82,82,.95); }
 }
 
 .skull-banner{
@@ -303,48 +246,32 @@ html,body{
   animation: bonusPop 1.6s ease forwards;
 }
 
-.stop-row{
-  display:flex;
-  justify-content:center;
-  gap:10px;
-  margin-bottom:12px;
-}
 .stop-btn{
   border:none; cursor:pointer;
-  width:88px; height:46px;
-  font-weight:900; font-size:13px;
-  color:#0A3D91;
-  background-color: transparent;
-  background-image: url('../assets/img/ui/btn_stop.png');
-  background-size:100% 100%;
-  background-repeat:no-repeat;
-  text-shadow: 0 1px 0 rgba(255,255,255,.5);
+  width:78px; padding:9px 0;
+  font-weight:900; font-size:14px;
+  color:#5c3400;
+  background: linear-gradient(180deg,#fff6cf,var(--yellow));
+  border-radius: var(--radius-sm);
+  box-shadow: var(--glossy);
 }
 .stop-btn:disabled{ opacity:.4; cursor:default; }
-.stop-btn:active:not(:disabled){
-  background-image: url('../assets/img/ui/btn_stop_pressed.png');
-  transform: translateY(2px);
-}
+.stop-btn:active:not(:disabled){ box-shadow: var(--glossy-pressed); transform: translateY(2px) scale(.97); filter:brightness(.92); }
 
 .spin-row{ display:flex; justify-content:center; }
 #spinBtn{
   border:none; cursor:pointer;
-  width:200px; height:64px;
+  padding:14px 46px;
   font-size:19px; font-weight:900; letter-spacing:2px;
   color:#fff;
-  text-shadow: 0 2px 2px rgba(0,0,0,.35);
-  background-color: transparent;
-  background-image: url('../assets/img/ui/btn_spin.png');
-  background-size:100% 100%;
-  background-repeat:no-repeat;
+  background: linear-gradient(180deg, #3d8bff, var(--blue-dark));
+  border-radius: 999px;
+  box-shadow: var(--glossy);
 }
 #spinBtn:disabled{ opacity:.4; cursor:default; }
-#spinBtn:active:not(:disabled){
-  background-image: url('../assets/img/ui/btn_spin_pressed.png');
-  transform: translateY(2px);
-}
+#spinBtn:active:not(:disabled){ box-shadow: var(--glossy-pressed); transform: translateY(2px); }
 
-.cost-note{ text-align:center; font-size:12px; color:#eaf4ff; margin-top:8px; font-weight:700; opacity:.85; }
+.cost-note{ text-align:center; font-size:12px; color:var(--blue-dark); margin-top:8px; font-weight:700; opacity:.8; }
 
 .judge-banner{
   position:absolute; left:50%; top:38%;
@@ -499,61 +426,6 @@ html,body{
 }
 .gameover-sub{ color:#fff; font-weight:700; opacity:.85; margin-bottom:18px; }
 
-/* ===================== ドクロよけルーレット ===================== */
-.guard-roulette-overlay{
-  position:fixed; inset:0; background: rgba(4,12,30,.82);
-  display:flex; align-items:center; justify-content:center;
-  z-index:85; opacity:0; pointer-events:none; transition: opacity .25s ease;
-}
-.guard-roulette-overlay.active{ opacity:1; pointer-events:all; }
-.guard-roulette-box{
-  background: linear-gradient(180deg,#ffffff,#f3f7fc);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--glossy);
-  padding:22px 24px 26px;
-  text-align:center;
-  border:4px solid var(--yellow);
-  width:min(86vw, 300px);
-}
-.guard-roulette-title{
-  font-size:16px; font-weight:900; color:var(--blue-dark);
-  margin-bottom:16px; letter-spacing:1px;
-}
-.guard-roulette-dial-wrap{
-  position:relative;
-  width:180px; height:180px;
-  margin:0 auto 16px;
-}
-.guard-roulette-dial{
-  width:100%; height:100%;
-  border-radius:50%;
-  box-shadow: inset 0 0 0 4px #fff, 0 3px 10px rgba(0,0,0,.3);
-  border:4px solid var(--yellow);
-}
-.guard-roulette-needle{
-  position:absolute; left:50%; top:50%;
-  width:6px; height:78px;
-  background: linear-gradient(180deg, var(--blue-dark), #16345f);
-  border-radius:4px;
-  transform-origin: 50% 100%;
-  transform: translate(-50%,-100%) rotate(0deg);
-  box-shadow: 0 2px 4px rgba(0,0,0,.4);
-}
-.guard-roulette-pin{
-  position:absolute; left:50%; top:50%;
-  width:16px; height:16px;
-  background: radial-gradient(circle at 35% 30%, #fff6cf, var(--yellow) 55%, var(--yellow-dark) 100%);
-  border-radius:50%;
-  transform: translate(-50%,-50%);
-  box-shadow: 0 1px 3px rgba(0,0,0,.4);
-}
-.roulette-result{
-  min-height:26px;
-  font-size:18px; font-weight:900;
-}
-.roulette-result.success{ color:#1c8a4a; }
-.roulette-result.fail{ color:#ff5252; }
-
 /* ===================== MODALS ===================== */
 .modal-overlay{
   position:fixed; inset:0; background: rgba(4,12,30,.6);
@@ -586,27 +458,6 @@ html,body{
   font-size:14px; font-weight:700; color:var(--text);
 }
 .field-hint{ font-size:11px; color:#7590b5; margin-top:4px; }
-
-/* ===================== 管理画面：アイテムアイコン（絵文字/画像切替） ===================== */
-.icon-mode-tabs{ display:flex; gap:6px; margin-bottom:8px; }
-.icon-mode-tab{
-  flex:1; border:2px solid #cfe0f5; background:#fff; color:#3a5a8a;
-  font-weight:800; font-size:13px; padding:8px 0; border-radius:8px; cursor:pointer;
-}
-.icon-mode-tab.active{
-  background: var(--blue-dark); border-color: var(--blue-dark); color:#fff;
-}
-.icon-dropzone{
-  border:2px dashed #a9c6ea; border-radius:10px;
-  min-height:100px;
-  display:flex; align-items:center; justify-content:center; flex-direction:column;
-  text-align:center; padding:10px; cursor:pointer;
-  color:#5c7ba3; font-size:13px;
-  background:#f7fafd;
-  transition: background .15s ease, border-color .15s ease;
-}
-.icon-dropzone.dragover{ background:#e6f0ff; border-color: var(--blue-dark); }
-.icon-dropzone img{ max-width:80px; max-height:80px; border-radius:8px; margin-bottom:6px; object-fit:contain; }
 
 .primary-btn{
   border:none; cursor:pointer; width:100%;
@@ -661,9 +512,10 @@ html,body{
 
 /* Responsive */
 @media (max-width: 480px){
-  .reel-window{ width:70px; height:84px; }
-  .stop-btn{ width:74px; height:40px; font-size:12px; }
-  #spinBtn{ width:170px; height:56px; font-size:16px; }
+  .reel-window{ width:62px; height:76px; }
+  .reel-value{ font-size:34px; }
+  .stop-btn{ width:62px; font-size:12px; padding:7px 0; }
+  #spinBtn{ padding:12px 32px; font-size:16px; }
   .tile{ width:56px; height:64px; }
   .tile-reward{ font-size:12px; }
   .hud-box{ padding:6px 10px; }
