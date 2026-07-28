@@ -23,9 +23,12 @@
     <div class="hud-actions">
       <button id="profileBtn">👤 プロフィール</button>
       <button id="rankingBtn">🏆 ランキング</button>
+      <button id="shopBtn">🛒 ショップ</button>
       <button id="resetBtn">↺ Reset</button>
     </div>
   </div>
+
+  <div class="effect-badges" id="effectBadges"></div>
 
   <div class="lucky-meter-wrap">
     <div class="lucky-meter-label" id="luckyMeterLabel">LUCKY METER 0/10</div>
@@ -36,17 +39,19 @@
     <div class="judge-banner" id="judgeBanner"></div>
     <div class="reels">
       <div class="reel-unit">
-        <div class="reel-window" id="reelWindow0"><div class="reel-value" id="reelValue0">1</div></div>
-        <button class="stop-btn" id="stopBtn0" disabled>STOP</button>
+        <div class="reel-window" id="reelWindow0"><div class="reel-value" id="reelValue0"><img src="assets/img/numbers/number_1.png" alt="1"></div></div>
       </div>
       <div class="reel-unit">
-        <div class="reel-window" id="reelWindow1"><div class="reel-value" id="reelValue1">1</div></div>
-        <button class="stop-btn" id="stopBtn1" disabled>STOP</button>
+        <div class="reel-window" id="reelWindow1"><div class="reel-value" id="reelValue1"><img src="assets/img/numbers/number_1.png" alt="1"></div></div>
       </div>
       <div class="reel-unit">
-        <div class="reel-window" id="reelWindow2"><div class="reel-value" id="reelValue2">1</div></div>
-        <button class="stop-btn" id="stopBtn2" disabled>STOP</button>
+        <div class="reel-window" id="reelWindow2"><div class="reel-value" id="reelValue2"><img src="assets/img/numbers/number_1.png" alt="1"></div></div>
       </div>
+    </div>
+    <div class="stop-row">
+      <button class="stop-btn" id="stopBtn0" disabled>STOP</button>
+      <button class="stop-btn" id="stopBtn1" disabled>STOP</button>
+      <button class="stop-btn" id="stopBtn2" disabled>STOP</button>
     </div>
     <div class="spin-row">
       <button id="spinBtn">SPIN ▶</button>
@@ -64,6 +69,19 @@
       <div class="gameover-title">GAME OVER</div>
       <div class="gameover-sub">コインが尽きました。リセットして再挑戦しよう！</div>
       <button id="resetBtnGO" style="border:none;cursor:pointer;background:linear-gradient(180deg,#fff6cf,var(--yellow));color:#5c3400;font-weight:900;padding:12px 30px;border-radius:999px;box-shadow:var(--glossy);font-size:15px;">↺ もう一度あそぶ</button>
+    </div>
+  </div>
+
+  <!-- ドクロよけルーレット演出（成功率が1〜99%のアイテムが発動した時だけ表示） -->
+  <div class="guard-roulette-overlay" id="guardRouletteOverlay">
+    <div class="guard-roulette-box">
+      <div class="guard-roulette-title">🛡️ ドクロよけ判定！</div>
+      <div class="guard-roulette-dial-wrap">
+        <div class="guard-roulette-dial" id="guardRouletteDial"></div>
+        <div class="guard-roulette-needle" id="guardRouletteNeedle"></div>
+        <div class="guard-roulette-pin"></div>
+      </div>
+      <div class="roulette-result" id="guardRouletteResult"></div>
     </div>
   </div>
 
@@ -121,6 +139,32 @@
       <div class="field-hint">同じあいことばは1人1回のみ使用できます</div>
     </div>
     <button class="primary-btn" id="aikotobaSubmitBtn">送信する</button>
+  </div>
+</div>
+
+<!-- ===================== ショップモーダル ===================== -->
+<div class="modal-overlay" id="shopModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2>🛒 ショップ</h2>
+      <button class="modal-close-btn" id="shopCloseBtn">✕</button>
+    </div>
+    <div class="field-hint" style="margin-bottom:12px;">コインでアイテムを購入できます（ゲームオーバーになるまで有効・端末をリロードすると引き継がれません）</div>
+    <div id="shopItemList"></div>
+  </div>
+</div>
+
+<!-- ===================== アイテム買い替え確認モーダル ===================== -->
+<div class="modal-overlay" id="shopConfirmModal">
+  <div class="modal-box" style="max-width:340px;">
+    <div class="modal-header">
+      <h2>⚠️ 確認</h2>
+    </div>
+    <div id="shopConfirmMessage" style="font-size:14px; color:var(--blue-dark); font-weight:700; margin-bottom:18px; line-height:1.6;"></div>
+    <div style="display:flex; gap:10px;">
+      <button class="primary-btn" id="shopConfirmNoBtn" style="background:#ccc; color:#333;">いいえ</button>
+      <button class="primary-btn" id="shopConfirmYesBtn">はい</button>
+    </div>
   </div>
 </div>
 

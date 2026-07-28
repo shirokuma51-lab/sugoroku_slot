@@ -15,6 +15,7 @@ import {
   ensureGlobalStats, recordNewPlayer, recordPlayStart, recordSpinResult,
 } from './statistics.js';
 import { Game } from './game.js';
+import { subscribeShopCatalog } from './shop.js';
 import { openModal, closeModal, showToast, escapeHtml } from './ui.js';
 import { showAchievementEffect } from './effects.js';
 import { Sound } from './sound.js';
@@ -42,15 +43,24 @@ async function bootstrap(){
   wireProfileModal();
   wireRankingModal();
   wireAikotobaModal();
+  wireShopModal();
   wireResetButton();
 
   Game.init({
     onScoreChange: onGameScoreChange,
     onSpinResolved: onGameSpinResolved,
+    onCoinsChange(){ renderShopList(lastShopCatalog); },
+    onShopStatusChange(){ renderShopList(lastShopCatalog); },
     onGameOver(){ /* 現状追加処理なし（拡張ポイント） */ },
     onReset(){ recordPlayStart(currentUid); },
   });
   gameReady = true;
+
+  shopUnsub = subscribeShopCatalog((list)=>{
+    lastShopCatalog = list;
+    Game.setShopCatalog(list.filter(i=>i.enabled));
+    renderShopList(list);
+  });
 
   // あいことば由来の称号(titles/{id})を含む「称号名の解決」を常に最新に保つ。
   // 更新が来るたびに、称号名を表示している箇所を再描画する。
@@ -248,6 +258,114 @@ function wireRankingModal(){
     if(!rankingUnsub) rankingUnsub = subscribeRanking((list)=>{ lastRankingList = list; renderRankingList(list); });
   });
   if(closeBtn) closeBtn.addEventListener('click', ()=>{ Sound.click(); closeModal('rankingModal'); });
+}
+
+/* ============================================================
+   ショップ（商品構成・価格はFirestore(shopItems)から購読。管理画面で変更可能）
+============================================================ */
+let shopUnsub = null;
+let lastShopCatalog = [];
+let pendingConfirmItemId = null; // 買い替え確認モーダルで「はい」が押されるまで保留中のアイテムID
+
+function wireShopModal(){
+  const openBtn = document.getElementById('shopBtn');
+  const closeBtn = document.getElementById('shopCloseBtn');
+  if(openBtn) openBtn.addEventListener('click', ()=>{ Sound.click(); openModal('shopModal'); });
+  if(closeBtn) closeBtn.addEventListener('click', ()=>{ Sound.click(); closeModal('shopModal'); });
+
+  const confirmNoBtn = document.getElementById('shopConfirmNoBtn');
+  const confirmYesBtn = document.getElementById('shopConfirmYesBtn');
+  if(confirmNoBtn) confirmNoBtn.addEventListener('click', ()=>{
+    Sound.click();
+    closeModal('shopConfirmModal');
+    pendingConfirmItemId = null;
+  });
+  if(confirmYesBtn) confirmYesBtn.addEventListener('click', ()=>{
+    if(!pendingConfirmItemId) return;
+    const itemId = pendingConfirmItemId;
+    pendingConfirmItemId = null;
+    closeModal('shopConfirmModal');
+    executePurchase(itemId, { confirmed:true });
+  });
+
+  // ボタンは商品ごとに動的生成されるため、コンテナに1つだけイベント委譲で登録する
+  const list = document.getElementById('shopItemList');
+  if(list){
+    list.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.shop-buy-btn');
+      if(!btn || btn.disabled) return;
+      const itemId = btn.dataset.itemId;
+      const info = Game.getShopPurchaseInfo(itemId);
+
+      if(info.reason === 'cheaper_blocked'){
+        Sound.trapHit();
+        showToast(`「${info.currentItemName}」の方が高額なため購入できません`, { title:'🛒 購入不可', variant:'error' });
+        return;
+      }
+      if(info.reason === 'insufficient_coins'){
+        Sound.trapHit();
+        showToast('コインが足りません', { title:'🛒 購入失敗', variant:'error' });
+        return;
+      }
+      if(info.needsConfirm){
+        const item = (lastShopCatalog || []).find(i=>i.id===itemId);
+        document.getElementById('shopConfirmMessage').textContent =
+          `現在ご利用中の「${info.currentItemName}」の効果が失効します。「${item ? item.name : ''}」を購入してよろしいですか？`;
+        pendingConfirmItemId = itemId;
+        openModal('shopConfirmModal');
+        return;
+      }
+      executePurchase(itemId, {});
+    });
+  }
+}
+
+function executePurchase(itemId, options){
+  const result = Game.buyItem(itemId, options);
+  if(result && result.ok){
+    Sound.passwordSuccess();
+    showToast('アイテムを購入しました！', { title:'🛒 購入完了', variant:'success' });
+  } else if(result && result.reason === 'cheaper_blocked'){
+    Sound.trapHit();
+    showToast(`「${result.currentItemName}」の方が高額なため購入できません`, { title:'🛒 購入不可', variant:'error' });
+  } else {
+    Sound.trapHit();
+    showToast('コインが足りません', { title:'🛒 購入失敗', variant:'error' });
+  }
+}
+
+function renderShopList(list){
+  const container = document.getElementById('shopItemList');
+  if(!container) return;
+  const enabledItems = (list || []).filter(i=>i.enabled);
+
+  container.innerHTML = enabledItems.map(item=>{
+    const category = item.category || item.effectType;
+    const info = Game.getShopPurchaseInfo ? Game.getShopPurchaseInfo(item.id) : { allowed:true };
+    const blocked = info.reason === 'cheaper_blocked';
+    const disabled = !info.allowed;
+
+    let paramLabel = '';
+    if(category === 'skullGuard' && item.guardChance != null){
+      paramLabel = `<span class="shop-item-chance">成功率${item.guardChance}%</span>`;
+    } else if(category){
+      paramLabel = item.multiplierMode === 'random'
+        ? `<span class="shop-item-chance">${item.multiplierMin}〜${item.multiplierMax}倍</span>`
+        : `<span class="shop-item-chance">${item.multiplier}倍</span>`;
+    }
+
+    return `
+    <div class="shop-item ${blocked ? 'shop-item-blocked':''}">
+      <div class="shop-item-icon">${item.iconType==='image' && item.iconImage ? `<img src="${item.iconImage}" alt="" style="width:100%;height:100%;object-fit:contain;">` : escapeHtml(item.icon || '🎁')}</div>
+      <div class="shop-item-body">
+        <div class="shop-item-name">${escapeHtml(item.name || '')} ${paramLabel}</div>
+        <div class="shop-item-desc">${escapeHtml(item.desc || '')}</div>
+        ${blocked ? `<div class="shop-item-blocked-note">「${escapeHtml(info.currentItemName||'')}」が有効中のため購入できません</div>` : ''}
+      </div>
+      <button class="shop-buy-btn" data-item-id="${item.id}" ${disabled ? 'disabled' : ''}>${item.cost}<span class="coin-icon-sm"></span></button>
+    </div>
+  `;
+  }).join('') || '<div class="ranking-empty">現在購入できるアイテムはありません</div>';
 }
 
 function renderRankingList(list){

@@ -10,25 +10,44 @@
 //     iconImage   : string|null （iconType==='image'の時に使うdataURL。管理画面で
 //                                 ドラッグ&ドロップ/ファイル選択した画像を縮小・base64化したもの）
 //     cost        : number   （購入に必要なコイン数）
-//     spins       : number   （効果が持続するスピン回数）
-//     effectType  : 'scoreBoost' | 'skullGuard'
-//         ※効果の"種類"自体はゲームロジック側に実装済みの2種類から選ぶ形。
-//           管理者が自由に変更・追加できるのは「名前・説明・アイコン・価格・持続スピン数・有効/無効」。
+//     spins       : number   （効果が持続するスピン回数。0は特別扱い＝下記参照）
+//     category    : 'scoreBoost' | 'coinBoost' | 'skullGuard'
+//         ※分類自体はゲームロジック側に実装済みの3種類から選ぶ形。
+//           管理者が自由に変更・追加できるのは「名前・説明・アイコン・価格・
+//           持続スピン数・倍率(または確率)・有効/無効」。
+//         ※旧データ（effectTypeフィールドのみを持つ）も引き続き動作するよう、
+//           読み込み側(game.js)は category が無ければ effectType を見る。
+//
+//     --- scoreBoost / coinBoost 用 ---
+//     multiplierMode : 'fixed' | 'random'
+//     multiplier      : number  （固定倍率。小数点第一位まで。fixed時に使用）
+//     multiplierMin/Max: number （ランダム倍率の範囲。小数点第一位まで。random時に使用。
+//                                  実際の倍率は「毎スピンごとに」この範囲内で再抽選される）
+//     持続スピン数=0 → 「このゲーム中（リセットまで）ずっと有効」という意味になる
+//
+//     --- skullGuard 用 ---
+//     guardChance : number(0〜100)  （ドクロよけ成功率。100なら演出なしで確定ガード）
+//     持続スピン数=0 → 「次にルーレットが1回発動（開始）した時点で消費・失効」という意味になる
+//         （スコア/コイン倍率の「0=ゲーム中ずっと」とは意味が異なる点に注意）
+//
 //     enabled     : boolean  （trueのものだけプレイヤー側ショップに表示される）
 //     order       : number   （表示順。小さい順）
 //
 // プレイヤーの「購入済み・残り効果」自体はこれまで通りブラウザ内メモリのみで保持し
-// Firestoreには保存しない（game.js の state.shop を参照）。
+// Firestoreには保存しない（game.js の state.shop.active を参照）。
 // ============================================================
 import {
   db, doc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
   collection, query, orderBy, onSnapshot,
 } from './firebase.js';
 
-export const EFFECT_TYPES = {
-  scoreBoost: { label: 'スコア2倍（指定スピン数の間、獲得スコアが2倍）' },
-  skullGuard: { label: 'ドクロよけ（指定スピン数の間、指定確率で💀を防ぐ）' },
+export const CATEGORIES = {
+  scoreBoost: { label: 'スコア倍率（指定スピン数の間、獲得スコアが指定倍になる）', usesMultiplier: true },
+  coinBoost:  { label: 'コイン倍率（指定スピン数の間、マスで増減するコイン数が指定倍になる）', usesMultiplier: true },
+  skullGuard: { label: 'ドクロよけ（指定スピン数の間、指定確率で💀を防ぐ）', usesMultiplier: false },
 };
+// 後方互換のため、以前の名前でも参照できるようにしておく
+export const EFFECT_TYPES = CATEGORIES;
 
 /** ショップアイテム一覧をリアルタイム購読する（enabled/disabled問わず全件・order昇順）。 */
 export function subscribeShopCatalog(callback){
@@ -40,20 +59,48 @@ export function subscribeShopCatalog(callback){
   });
 }
 
-export async function createShopItem(data){
+function buildIconFields(data){
   const iconType = data.iconType === 'image' ? 'image' : 'emoji';
-  const docRef = await addDoc(collection(db, 'shopItems'), {
-    name: data.name || '',
-    desc: data.desc || '',
+  return {
     iconType,
     icon: iconType === 'emoji' ? (data.icon || '🎁') : '',
     iconImage: iconType === 'image' ? (data.iconImage || null) : null,
+  };
+}
+
+function round1(n){
+  return Math.round(Number(n) * 10) / 10;
+}
+
+function buildCategoryFields(data){
+  const category = data.category || data.effectType;
+  if(category === 'skullGuard'){
+    return {
+      category,
+      guardChance: Number(data.guardChance ?? 70),
+      multiplierMode: null, multiplier: null, multiplierMin: null, multiplierMax: null,
+    };
+  }
+  // scoreBoost / coinBoost
+  const multiplierMode = data.multiplierMode === 'random' ? 'random' : 'fixed';
+  return {
+    category,
+    guardChance: null,
+    multiplierMode,
+    multiplier: multiplierMode === 'fixed' ? round1(data.multiplier ?? 2) : null,
+    multiplierMin: multiplierMode === 'random' ? round1(data.multiplierMin ?? 1.5) : null,
+    multiplierMax: multiplierMode === 'random' ? round1(data.multiplierMax ?? 3) : null,
+  };
+}
+
+export async function createShopItem(data){
+  const docRef = await addDoc(collection(db, 'shopItems'), {
+    name: data.name || '',
+    desc: data.desc || '',
+    ...buildIconFields(data),
     cost: Number(data.cost) || 0,
-    spins: Number(data.spins) || 1,
-    effectType: data.effectType,
-    // guardChance: ドクロよけ(skullGuard)の成功率(%)。0〜100。100なら演出なしで確定ガード。
-    // scoreBoost等、確率が関係ないアイテムでは無視される（nullのままでよい）。
-    guardChance: data.effectType === 'skullGuard' ? Number(data.guardChance ?? 70) : null,
+    spins: Number(data.spins) || 0,
+    ...buildCategoryFields(data),
     enabled: !!data.enabled,
     order: Number(data.order) || 0,
   });
@@ -65,17 +112,11 @@ export async function updateShopItem(id, data){
   if(payload.cost !== undefined) payload.cost = Number(payload.cost);
   if(payload.spins !== undefined) payload.spins = Number(payload.spins);
   if(payload.order !== undefined) payload.order = Number(payload.order);
-  if(payload.effectType === 'skullGuard'){
-    payload.guardChance = Number(payload.guardChance ?? 70);
-  } else if(payload.effectType){
-    payload.guardChance = null;
+  if(payload.category || payload.effectType){
+    Object.assign(payload, buildCategoryFields(payload));
   }
-  if(payload.iconType === 'image'){
-    payload.icon = '';
-    payload.iconImage = payload.iconImage || null;
-  } else if(payload.iconType === 'emoji'){
-    payload.iconImage = null;
-    payload.icon = payload.icon || '🎁';
+  if(payload.iconType){
+    Object.assign(payload, buildIconFields(payload));
   }
   await updateDoc(doc(db, 'shopItems', id), payload);
 }
@@ -91,11 +132,13 @@ export async function seedDefaultShopItemsIfEmpty(){
 
   await createShopItem({
     name: 'スコア2倍チケット', desc: '次の5回のスピンで獲得スコアが2倍になる',
-    iconType:'emoji', icon: '✨', cost: 30, spins: 5, effectType: 'scoreBoost', enabled: true, order: 1,
+    iconType:'emoji', icon: '✨', cost: 30, spins: 5,
+    category: 'scoreBoost', multiplierMode:'fixed', multiplier:2, enabled: true, order: 1,
   });
   await createShopItem({
     name: 'ドクロよけのお守り', desc: '次の5回のスピンの間、70%の確率で💀を防ぐ',
-    iconType:'emoji', icon: '🛡️', cost: 40, spins: 5, effectType: 'skullGuard', guardChance: 70, enabled: true, order: 2,
+    iconType:'emoji', icon: '🛡️', cost: 40, spins: 5,
+    category: 'skullGuard', guardChance: 70, enabled: true, order: 2,
   });
   return true;
 }

@@ -37,6 +37,7 @@
       <button class="admin-tab-btn active" data-tab="stats">統計</button>
       <button class="admin-tab-btn" data-tab="ranking">ランキング</button>
       <button class="admin-tab-btn" data-tab="password">あいことば管理</button>
+      <button class="admin-tab-btn" data-tab="shop">ショップ管理</button>
     </div>
 
     <!-- 統計タブ -->
@@ -96,6 +97,108 @@
           <div style="display:flex; gap:8px;">
             <button type="submit" class="primary-btn">保存</button>
             <button type="button" class="primary-btn" id="pwFormCancelBtn" style="background:#ccc; color:#333;">キャンセル</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ショップ管理タブ -->
+    <div data-tab-panel="shop" style="display:none;">
+      <div class="field-hint" style="margin-bottom:14px;">
+        価格やスピン数、名前・説明・有効/無効・倍率(または確率)はここから変更できます。「アイテムの種類」だけはゲーム内に実装済みの3種類（スコア倍率／コイン倍率／ドクロよけ）から選ぶ形式です。
+      </div>
+      <button class="primary-btn" id="shopSeedBtn" style="margin-bottom:10px; background:#e6f0ff; color:var(--blue-dark);">初期アイテムを投入する（未登録の場合のみ）</button>
+      <button class="primary-btn" id="shopAddBtn" style="margin-bottom:14px;">＋ アイテムを追加</button>
+      <div id="shopAdminList"></div>
+
+      <div id="shopFormPanel" style="display:none; margin-top:16px; border-top:2px solid #dbe9fb; padding-top:14px;">
+        <h3 id="shopFormTitle" style="color:var(--blue-dark);">アイテム追加</h3>
+        <form id="shopForm">
+          <div class="field-group">
+            <label>アイコン</label>
+            <div class="icon-mode-tabs">
+              <button type="button" class="icon-mode-tab active" id="iconModeEmojiBtn">絵文字</button>
+              <button type="button" class="icon-mode-tab" id="iconModeImageBtn">画像</button>
+            </div>
+
+            <div id="iconEmojiPanel">
+              <input type="text" id="shopIcon" maxlength="4" placeholder="✨">
+            </div>
+
+            <div id="iconImagePanel" style="display:none;">
+              <div class="icon-dropzone" id="iconDropzone">
+                <img id="iconImagePreview" style="display:none;">
+                <div id="iconDropzoneHint">
+                  画像をドラッグ&ドロップ<br>
+                  <span style="font-size:11px; opacity:.7;">またはタップして選択（PNG / JPG / WebP）</span>
+                </div>
+              </div>
+              <input type="file" id="shopIconFile" accept="image/png,image/jpeg,image/webp" style="display:none;">
+              <div class="field-hint" id="iconImageError" style="color:#c0392b; display:none;"></div>
+            </div>
+          </div>
+          <div class="field-group">
+            <label>アイテム名</label>
+            <input type="text" id="shopName" required>
+          </div>
+          <div class="field-group">
+            <label>説明文</label>
+            <input type="text" id="shopDesc" required>
+          </div>
+          <div class="field-group">
+            <label>アイテムの種類</label>
+            <select id="shopCategory" required>
+              <option value="scoreBoost">スコア倍率（獲得スコアが指定倍になる）</option>
+              <option value="coinBoost">コイン倍率（マスで増減するコイン数が指定倍になる）</option>
+              <option value="skullGuard">ドクロよけ（指定確率で💀を防ぐ）</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label>価格（コイン）</label>
+            <input type="number" id="shopCost" min="0" required>
+          </div>
+          <div class="field-group">
+            <label>持続スピン数</label>
+            <input type="number" id="shopSpins" min="0" required>
+            <div class="field-hint" id="spinsZeroHint">0にすると：スコア/コイン倍率は「このゲーム中（リセットまで）ずっと有効」、ドクロよけは「次にルーレットが1回発動した時点で消費・失効」になります。</div>
+          </div>
+
+          <div class="field-group" id="shopMultiplierGroup">
+            <label>倍率の決め方</label>
+            <div class="icon-mode-tabs">
+              <button type="button" class="icon-mode-tab active" id="multiplierModeFixedBtn">固定倍率</button>
+              <button type="button" class="icon-mode-tab" id="multiplierModeRandomBtn">ランダム倍率</button>
+            </div>
+            <div id="multiplierFixedPanel">
+              <input type="number" id="shopMultiplier" step="0.1" min="0.1" value="2.0">
+              <div class="field-hint">例：2.0なら常に2倍</div>
+            </div>
+            <div id="multiplierRandomPanel" style="display:none;">
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input type="number" id="shopMultiplierMin" step="0.1" min="0.1" value="1.5" style="flex:1;">
+                <span>〜</span>
+                <input type="number" id="shopMultiplierMax" step="0.1" min="0.1" value="3.0" style="flex:1;">
+                <span>倍</span>
+              </div>
+              <div class="field-hint">毎スピンごとに、この範囲内でランダムに倍率が決まります（小数点第一位まで）</div>
+            </div>
+          </div>
+
+          <div class="field-group" id="shopGuardChanceGroup">
+            <label>ドクロよけ成功率（%）</label>
+            <input type="number" id="shopGuardChance" min="0" max="100" value="70">
+            <div class="field-hint">100%にすると、ルーレット演出なしで即座に防ぎます。1〜99%だとルーレットで成功/失敗を演出してから結果が反映されます。</div>
+          </div>
+          <div class="field-group">
+            <label>表示順（小さい順に並ぶ）</label>
+            <input type="number" id="shopOrder" min="0" value="0">
+          </div>
+          <div class="field-group">
+            <label><input type="checkbox" id="shopEnabled" checked style="width:auto;"> 有効にする（プレイヤーのショップに表示）</label>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button type="submit" class="primary-btn">保存</button>
+            <button type="button" class="primary-btn" id="shopFormCancelBtn" style="background:#ccc; color:#333;">キャンセル</button>
           </div>
         </form>
       </div>

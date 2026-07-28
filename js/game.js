@@ -43,6 +43,13 @@ export const CONFIG = {
   // （残り2リールには絶対に出ない）。これによりゲームオーバー確率を約1/3に抑えている。
   skullChance: 0.05,      // 💀許可リールが実際に💀で停止する確率（5%）
   skullTickChance: 0.06,  // 💀許可リールの回転中表示にも演出として💀をたまに混ぜる確率
+
+  // ---- ショップのデフォルト（Firestoreにまだ1件も登録されていない時のフォールバック表示用） ----
+  // 実際の価格・アイテム構成は管理画面(admin.html)からFirestore(shopItems)を編集して変更できる。
+  defaultShopItems: [
+    { id:'scoreBoost', name:'スコア2倍チケット', desc:'次の5回のスピンで獲得スコアが2倍になる', icon:'✨', cost:30, spins:5, category:'scoreBoost', multiplierMode:'fixed', multiplier:2, enabled:true },
+    { id:'skullGuard', name:'ドクロよけのお守り', desc:'次の5回のスピンの間、70%の確率で💀を防ぐ', icon:'🛡️', cost:40, spins:5, category:'skullGuard', guardChance:70, enabled:true },
+  ],
 };
 
 const TILE_TYPE_ICON = {
@@ -54,6 +61,31 @@ const TILE_TYPE_ICON = {
 };
 
 function randomFrom(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+/** アイテムの分類を取得する（新スキーマ:category / 旧データ:effectType のどちらでも動くようにする）。 */
+function getItemCategory(item){
+  return item.category || item.effectType;
+}
+
+/** アイテムの倍率を今回のスピン用に解決する。ランダム倍率は毎スピン抽選し直す仕様。 */
+function resolveMultiplier(record){
+  if(record.multiplierMode === 'random'){
+    const lo = Math.min(record.multiplierMin, record.multiplierMax);
+    const hi = Math.max(record.multiplierMin, record.multiplierMax);
+    const raw = lo + Math.random() * (hi - lo);
+    return Math.round(raw * 10) / 10; // 小数点第一位まで
+  }
+  return record.multiplier;
+}
+
+/** リール窓の表示をvalueに応じて更新する（1〜6は画像、💀はテキスト絵文字）。 */
+function renderReelSymbol(container, value){
+  if(value === SKULL){
+    container.innerHTML = '<span class="skull-symbol">💀</span>';
+  } else {
+    container.innerHTML = `<img src="assets/img/numbers/number_${value}.png" alt="${value}">`;
+  }
+}
 
 /** 高速回転／減速中の「見た目だけ」の表示用（結果には影響しない）。
  *  演出として💀もたまに混ぜるが、💀が出うるリール(isSkullEligible)以外では絶対に出さない。 */
@@ -76,6 +108,18 @@ export const Game = (function(){
     ],
     resolving: false,
     skullReelIndex: null, // このスピンで💀が出うるリールの番号（null=未決定）
+
+    // ---- ショップ効果（ブラウザ内のみ・リセットで消える） ----
+    // カテゴリ(scoreBoost/coinBoost/skullGuard)ごとに、現在有効な「購入済みアイテム」の情報を保持する。
+    // nullならそのカテゴリの効果は現在無効。
+    shop: {
+      active: {
+        scoreBoost: null, // { itemId, itemName, iconType, icon, iconImage, cost, multiplierMode, multiplier, multiplierMin, multiplierMax, spinsLeft, permanent, resolvedThisSpin }
+        coinBoost: null,  // 同上
+        skullGuard: null, // { itemId, itemName, iconType, icon, iconImage, cost, guardChance, spinsLeft, consumeOnNextTrigger, activeThisSpin }
+      },
+    },
+    shopCatalog: [], // Firestore(shopItems)から購読した現在の商品一覧（main.jsがsetShopCatalogで注入）
   };
 
   const luckyMeter = new LuckyMeter(10);
@@ -98,6 +142,13 @@ export const Game = (function(){
       stopBtns: [0,1,2].map(i => document.getElementById('stopBtn'+i)),
       luckyMeterFill: document.getElementById('luckyMeterFill'),
       luckyMeterLabel: document.getElementById('luckyMeterLabel'),
+      effectBadges: document.getElementById('effectBadges'),
+      roulette: {
+        overlay: document.getElementById('guardRouletteOverlay'),
+        dial: document.getElementById('guardRouletteDial'),
+        needle: document.getElementById('guardRouletteNeedle'),
+        resultText: document.getElementById('guardRouletteResult'),
+      },
     };
   }
 
@@ -164,7 +215,164 @@ export const Game = (function(){
     return tile;
   }
 
+  function renderShopStatus(){
+    if(el.effectBadges){
+      const badges = [];
+      ['scoreBoost','coinBoost','skullGuard'].forEach(cat=>{
+        const rec = state.shop.active[cat];
+        if(!rec) return;
+        const iconHtml = rec.iconType === 'image' && rec.iconImage
+          ? `<img src="${rec.iconImage}" alt="" style="width:14px;height:14px;object-fit:contain;vertical-align:-2px;margin-right:2px;">`
+          : `${rec.icon || ''} `;
+        let durationLabel;
+        if(cat === 'skullGuard' && rec.consumeOnNextTrigger) durationLabel = '次の発動まで';
+        else if(rec.permanent) durationLabel = 'このゲーム中ずっと';
+        else durationLabel = `残り${rec.spinsLeft}回`;
+        const badgeClass = cat === 'skullGuard' ? 'effect-guard' : (cat === 'coinBoost' ? 'effect-coin' : 'effect-score');
+        badges.push(`<span class="effect-badge ${badgeClass}">${iconHtml}${escapeAttr(rec.itemName)} ${durationLabel}</span>`);
+      });
+      el.effectBadges.innerHTML = badges.join('');
+      el.effectBadges.classList.toggle('has-badges', badges.length > 0);
+    }
+    if(hooks.onShopStatusChange) hooks.onShopStatusChange();
+  }
+
+  function escapeAttr(str){
+    return String(str==null ? '' : str).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  /** 購入前に、実際に購入可能かどうかをUI側が判定するための情報を返す（コイン消費はしない）。
+   *  main.js はこれを見てボタンの有効/無効・確認ダイアログの要否を決める。 */
+  function getShopPurchaseInfo(itemId){
+    const item = state.shopCatalog.find(i=>i.id === itemId && i.enabled);
+    if(!item) return { allowed:false, reason:'not_found' };
+
+    const category = getItemCategory(item);
+    const current = state.shop.active[category];
+    const affordable = state.coins >= item.cost;
+
+    if(!current || current.itemId === item.id){
+      // 未購入 or 同一アイテムの再購入（＝スタック）
+      return { allowed: affordable, reason: affordable ? 'ok' : 'insufficient_coins', needsConfirm:false, willReplace:false };
+    }
+    // 別アイテムだが同カテゴリが既に有効
+    if(item.cost <= current.cost){
+      return { allowed:false, reason:'cheaper_blocked', currentItemName: current.itemName, needsConfirm:false, willReplace:false };
+    }
+    return { allowed: affordable, reason: affordable ? 'ok' : 'insufficient_coins', needsConfirm:true, willReplace:true, currentItemName: current.itemName };
+  }
+
+  function createActiveEffectRecord(item){
+    const category = getItemCategory(item);
+    const base = {
+      itemId: item.id,
+      itemName: item.name,
+      iconType: item.iconType || 'emoji',
+      icon: item.icon,
+      iconImage: item.iconImage || null,
+      cost: item.cost,
+      category,
+    };
+    if(category === 'skullGuard'){
+      return {
+        ...base,
+        guardChance: Number(item.guardChance ?? 70),
+        spinsLeft: item.spins > 0 ? item.spins : 0,
+        consumeOnNextTrigger: !(item.spins > 0), // spins===0（または未設定）なら「次の発動で消費」
+        activeThisSpin: false,
+      };
+    }
+    return {
+      ...base,
+      multiplierMode: item.multiplierMode === 'random' ? 'random' : 'fixed',
+      multiplier: item.multiplier != null ? Number(item.multiplier) : 2,
+      multiplierMin: item.multiplierMin != null ? Number(item.multiplierMin) : 1.5,
+      multiplierMax: item.multiplierMax != null ? Number(item.multiplierMax) : 3,
+      spinsLeft: item.spins > 0 ? item.spins : 0,
+      permanent: !(item.spins > 0),
+      activeThisSpin: false,
+      resolvedMultiplierThisSpin: null,
+    };
+  }
+
+  /** ショップアイテムを購入する。
+   *  同カテゴリの別アイテムに買い替える場合、事前に getShopPurchaseInfo() で needsConfirm を確認し、
+   *  ユーザーが確認ダイアログで「はい」を選んだ後に { confirmed:true } を付けて呼び出すこと。
+   *  戻り値: { ok, reason } */
+  function buyItem(itemId, options){
+    const confirmed = !!(options && options.confirmed);
+    const item = state.shopCatalog.find(i=>i.id === itemId && i.enabled);
+    if(!item || state.gameOver) return { ok:false, reason:'not_found' };
+    if(state.coins < item.cost) return { ok:false, reason:'insufficient_coins' };
+
+    const category = getItemCategory(item);
+    const current = state.shop.active[category];
+
+    if(current && current.itemId !== item.id){
+      if(item.cost <= current.cost) return { ok:false, reason:'cheaper_blocked', currentItemName: current.itemName };
+      if(!confirmed) return { ok:false, reason:'needs_confirm', currentItemName: current.itemName };
+    }
+
+    state.coins -= item.cost;
+
+    if(current && current.itemId === item.id){
+      // 同一アイテムの再購入 → 持続スピン数を加算（スタック）
+      if(item.spins === 0){
+        // 0を選んでの再購入 → 無制限/次発動消費モードに切り替える
+        if(category === 'skullGuard') current.consumeOnNextTrigger = true;
+        else current.permanent = true;
+      } else if(!current.permanent && !current.consumeOnNextTrigger){
+        current.spinsLeft += item.spins;
+      }
+      // guardChance/multiplier等のパラメータは同一アイテムなので変化なし
+    } else {
+      // 新規購入 or 上位アイテムへの買い替え（古い効果は失効）
+      state.shop.active[category] = createActiveEffectRecord(item);
+    }
+
+    renderCoins();
+    renderShopStatus();
+    return { ok:true };
+  }
+
   function setSpinButtonEnabled(enabled){ el.spinBtn.disabled = !enabled; }
+
+  /** スピン開始時に呼び、各カテゴリの効果について
+   *  「このスピンで有効か」「（対象なら）持続スピン数を1消費」「倍率の再抽選」を行う。
+   *  ドクロよけの consumeOnNextTrigger モードだけは、実際にルーレットが起動した瞬間に
+   *  beginFinalize() 側で消費するため、ここでは消費しない（有効フラグだけ立てる）。
+   *
+   *  注意：スピン数を使い切った効果はこのスピンの間はまだ有効（このスピンの結果には適用される）
+   *  必要があるため、即座にnullにはせず、次のスピン開始時にまとめて後片付けする。 */
+  function resolveShopEffectsForThisSpin(){
+    // 前回のスピンで使い切った効果をここで後片付けする
+    ['scoreBoost','coinBoost'].forEach(cat=>{
+      const rec = state.shop.active[cat];
+      if(rec && !rec.permanent && rec.spinsLeft <= 0) state.shop.active[cat] = null;
+    });
+    if(state.shop.active.skullGuard){
+      const g = state.shop.active.skullGuard;
+      if(!g.consumeOnNextTrigger && g.spinsLeft <= 0) state.shop.active.skullGuard = null;
+    }
+
+    ['scoreBoost','coinBoost'].forEach(cat=>{
+      const rec = state.shop.active[cat];
+      if(!rec) return;
+      rec.activeThisSpin = true;
+      rec.resolvedMultiplierThisSpin = resolveMultiplier(rec);
+      if(!rec.permanent) rec.spinsLeft--;
+    });
+
+    const guard = state.shop.active.skullGuard;
+    if(guard){
+      if(guard.consumeOnNextTrigger){
+        guard.activeThisSpin = true; // 発動待ち。実際の消費はbeginFinalize()で行う
+      } else {
+        guard.activeThisSpin = true;
+        guard.spinsLeft--;
+      }
+    }
+  }
 
   function startSpin(){
     if(state.gameOver || state.resolving) return;
@@ -173,6 +381,11 @@ export const Game = (function(){
     Sound.click();
     state.coins -= CONFIG.spinCost;
     renderCoins();
+
+    // このスピンで有効な効果を確定させる（ハズレのスピンでも消費対象。ただし
+    // ドクロよけの「次発動まで消費されない」モードだけは、スピン開始では消費しない）
+    resolveShopEffectsForThisSpin();
+    renderShopStatus();
 
     // このスピンで💀が出る可能性があるリールを1つだけランダムに決める（残り2つには一切出ない）
     state.skullReelIndex = Math.floor(Math.random() * state.reels.length);
@@ -189,7 +402,7 @@ export const Game = (function(){
 
       reel.intervalId = setInterval(()=>{
         reel.value = randomTickSymbol(idx === state.skullReelIndex);
-        el.reelValues[idx].textContent = reel.value === SKULL ? '💀' : reel.value;
+        renderReelSymbol(el.reelValues[idx], reel.value);
         Sound.spinTick();
       }, CONFIG.spinCycleInterval);
     });
@@ -206,24 +419,62 @@ export const Game = (function(){
     let count = 0;
     const decel = setInterval(()=>{
       reel.value = randomTickSymbol(idx === state.skullReelIndex);
-      el.reelValues[idx].textContent = reel.value === SKULL ? '💀' : reel.value;
+      renderReelSymbol(el.reelValues[idx], reel.value);
       count++;
       if(count >= CONFIG.decelSteps){
         clearInterval(decel);
-        finalizeReel(idx);
+        beginFinalize(idx);
       }
     }, 60 + count*10);
     reel.decelIntervalId = decel;
   }
 
   /**
-   * リール停止時の最終値を決める。
-   *   1) まず低確率で💀を抽選（当たるとその場で強制終了）
-   *   2) 💀でなければ、既に止まっている他のリールの数字に少し寄せて当たりやすくする
+   * 💀許可リールが停止する瞬間の判定フロー。
+   *   1) まず低確率(CONFIG.skullChance)で「💀が出そうになる」かどうかを決める
+   *   2) 出そうになった場合のみ、ドクロよけが有効なら成功率を判定する
+   *      - 成功率100%のアイテムはルーレット演出なしで即座に防ぐ
+   *      - それ以外（1〜99%）はルーレット演出を挟んでから結果を反映する
+   *   3) 💀が出ない場合はそのまま通常の数字（マッチ補正込み）を確定する
    */
-  function pickFinalValue(idx){
-    if(idx === state.skullReelIndex && Math.random() < CONFIG.skullChance) return SKULL;
+  function beginFinalize(idx){
+    const willSkull = (idx === state.skullReelIndex) && Math.random() < CONFIG.skullChance;
 
+    if(!willSkull){
+      finalizeReel(idx, pickNormalValue(idx));
+      return;
+    }
+
+    const guard = state.shop.active.skullGuard;
+    if(!guard || !guard.activeThisSpin){
+      finalizeReel(idx, SKULL);
+      return;
+    }
+
+    // 「持続スピン数0」のドクロよけは、まさにこの発動の瞬間に消費（失効）する
+    if(guard.consumeOnNextTrigger){
+      state.shop.active.skullGuard = null;
+      renderShopStatus();
+    }
+
+    const chance = guard.guardChance;
+    if(chance >= 100){
+      // 100%は演出なしで即座に防ぐ
+      finalizeReel(idx, pickNormalValue(idx));
+      return;
+    }
+    if(chance <= 0){
+      finalizeReel(idx, SKULL);
+      return;
+    }
+
+    runSkullGuardRoulette(chance).then(guarded=>{
+      finalizeReel(idx, guarded ? pickNormalValue(idx) : SKULL);
+    });
+  }
+
+  /** 💀以外の場合の最終値（他リールへのマッチ補正込み）。 */
+  function pickNormalValue(idx){
     const others = state.reels.filter((r,i)=> i!==idx && r.stopped && r.value !== SKULL);
     if(others.length === 2 && others[0].value === others[1].value){
       if(Math.random() < CONFIG.matchBoostThird) return others[0].value;
@@ -233,13 +484,75 @@ export const Game = (function(){
     return randomFrom(CONFIG.reelSymbols);
   }
 
-  function finalizeReel(idx){
+  /**
+   * ドクロよけルーレット演出。指定確率(%)で「防げた/防げなかった」をルーレットで見せてから
+   * Promise<boolean guarded> を返す。結果は演出開始前に既に抽選済みで、
+   * 針が止まる位置はその結果に合わせて逆算している（演出は結果を後付けで説明するだけ）。
+   */
+  function runSkullGuardRoulette(chancePercent){
+    return new Promise(resolve=>{
+      const guarded = Math.random() * 100 < chancePercent;
+      const zoneStartDeg = 0;
+      const zoneSplitDeg = chancePercent * 3.6; // 円グラフ上での「成功ゾーン」の終わり角度
+
+      let targetDeg;
+      if(guarded){
+        const lo = zoneStartDeg + 6, hi = Math.max(lo, zoneSplitDeg - 6);
+        targetDeg = hi > lo ? (lo + Math.random()*(hi-lo)) : zoneSplitDeg/2;
+      } else {
+        const lo = zoneSplitDeg + 6, hi = Math.max(lo, 360 - 6);
+        targetDeg = hi > lo ? (lo + Math.random()*(hi-lo)) : (zoneSplitDeg+360)/2;
+      }
+      const spins = 4; // 演出として4周回してから止める
+      const totalDeg = spins*360 + targetDeg;
+
+      el.roulette.dial.style.background =
+        `conic-gradient(#3ddc84 0deg ${zoneSplitDeg}deg, #ff5252 ${zoneSplitDeg}deg 360deg)`;
+      el.roulette.resultText.textContent = '';
+      el.roulette.resultText.className = 'roulette-result';
+      el.roulette.needle.style.transition = 'none';
+      el.roulette.needle.style.transform = 'translate(-50%,-100%) rotate(0deg)';
+      el.roulette.overlay.classList.add('active');
+      // 強制リフローしてから transition を再度有効化しないと、0degへのリセットがアニメーションされてしまう
+      void el.roulette.needle.offsetHeight;
+      el.roulette.needle.style.transition = 'transform 2.2s cubic-bezier(.17,.67,.16,1)';
+
+      const tickTimer = setInterval(()=>Sound.spinTick(), 90);
+      Sound.spinTick();
+
+      requestAnimationFrame(()=>{
+        // translate(-50%,-100%) は針の付け根をダイヤル中心に固定するための位置合わせ。
+        // rotate側だけを書き換えるとこのtranslateが消えて回転軸がズレるため、必ず両方セットで指定する。
+        el.roulette.needle.style.transform = `translate(-50%,-100%) rotate(${totalDeg}deg)`;
+      });
+
+      const onEnd = ()=>{
+        el.roulette.needle.removeEventListener('transitionend', onEnd);
+        clearInterval(tickTimer);
+        if(guarded){
+          el.roulette.resultText.textContent = '🛡️ 防いだ！';
+          el.roulette.resultText.classList.add('success');
+          Sound.luckyProc();
+        } else {
+          el.roulette.resultText.textContent = '💀 防げなかった…';
+          el.roulette.resultText.classList.add('fail');
+          Sound.skull();
+        }
+        setTimeout(()=>{
+          el.roulette.overlay.classList.remove('active');
+          resolve(guarded);
+        }, 900);
+      };
+      el.roulette.needle.addEventListener('transitionend', onEnd);
+    });
+  }
+
+  function finalizeReel(idx, finalValue){
     if(state.gameOver) return;
 
     const reel = state.reels[idx];
-    const finalValue = pickFinalValue(idx);
     reel.value = finalValue;
-    el.reelValues[idx].textContent = finalValue === SKULL ? '💀' : finalValue;
+    renderReelSymbol(el.reelValues[idx], finalValue);
     reel.stopped = true;
 
     el.reelWindows[idx].classList.remove('spinning');
@@ -367,17 +680,30 @@ export const Game = (function(){
       setTimeout(()=>tile.classList.remove('step-glow'), 400);
     }
 
-    state.coins += evt.amount;
+    // コイン倍率アイテムが有効なら、実際に増減するコイン数に倍率をかける（マイナスのTrapも対象）
+    const coinBoost = state.shop.active.coinBoost;
+    let coinDelta = evt.amount;
+    if(coinBoost && coinBoost.activeThisSpin){
+      coinDelta = Math.round(evt.amount * coinBoost.resolvedMultiplierThisSpin);
+    }
+    state.coins += coinDelta;
+
     if(evt.amount > 0){
-      state.score += evt.amount; // Trap(マイナス)はスコアに影響させない
+      // スコアは「元のマス表記のコイン数」を基準に計算する（コイン倍率アイテムの影響を受けない）。
+      // スコア2倍系アイテムが有効なら、その倍率をスコアにだけかける。Trap(マイナス)はスコアに影響させない。
+      const scoreBoost = state.shop.active.scoreBoost;
+      const scoreGain = (scoreBoost && scoreBoost.activeThisSpin)
+        ? Math.round(evt.amount * scoreBoost.resolvedMultiplierThisSpin)
+        : evt.amount;
+      state.score += scoreGain;
     }
     if(state.coins < 0) state.coins = 0;
 
     if(tile){
       const r = tile.getBoundingClientRect();
-      showFloatPop((evt.amount>=0?'+':'') + evt.amount, r.left + r.width/2 - 14, r.top - 6,
-        evt.amount < 0 ? '#ff5252' : undefined);
-      if(evt.amount > 0) flyCoinToHud(tile);
+      showFloatPop((coinDelta>=0?'+':'') + coinDelta, r.left + r.width/2 - 14, r.top - 6,
+        coinDelta < 0 ? '#ff5252' : undefined);
+      if(coinDelta > 0) flyCoinToHud(tile);
     }
 
     if(evt.type === TILE_TYPES.TRAP){
@@ -392,14 +718,16 @@ export const Game = (function(){
 
     if(evt.type === TILE_TYPES.BONUS10){
       Sound.bonus();
-      showBonusBanner('BONUS +' + evt.amount + '!!');
+      showBonusBanner('BONUS +' + coinDelta + '!!');
       if(tile){
         const r = tile.getBoundingClientRect();
         spawnConfetti(r.left+r.width/2, r.top, 40, ['#FFD23F','#FF5FA2','#8BFF5F','#5FD0FF','#FFFFFF']);
       }
     }
 
-    return evt;
+    // 呼び出し元（統計・実績トラッキング等）には実際に増減したコイン数を渡す
+    // （コイン倍率アイテムが有効な場合、マス本来の数値とは異なるため）
+    return { ...evt, amount: coinDelta };
   }
 
   function triggerGameOver(reason){
@@ -427,6 +755,9 @@ export const Game = (function(){
     state.gameOver = false;
     state.resolving = false;
     state.skullReelIndex = null;
+    state.shop.active.scoreBoost = null;
+    state.shop.active.coinBoost = null;
+    state.shop.active.skullGuard = null;
     state.tileEvents = generateTileEvents(CONFIG.boardSize, CONFIG.bonusTile, CONFIG.bonusAmount);
     luckyMeter.reset();
     state.reels.forEach(r=>{
@@ -435,7 +766,7 @@ export const Game = (function(){
       r.value = 1; r.spinning=false; r.stopped=true;
     });
 
-    el.reelValues.forEach(v=>{ v.textContent = '1'; });
+    el.reelValues.forEach(v=>{ renderReelSymbol(v, 1); });
     el.reelWindows.forEach(w=>w.classList.remove('spinning','landed','glow','skull'));
     el.stopBtns.forEach(b=>b.disabled = true);
     el.judgeBanner.className = 'judge-banner';
@@ -447,6 +778,7 @@ export const Game = (function(){
     renderScore(false);
     renderBoard();
     renderLuckyMeter();
+    renderShopStatus();
     setSpinButtonEnabled(true);
   }
 
@@ -455,7 +787,7 @@ export const Game = (function(){
      * @param {object} hookFns
      *   onCoinsChange(coins), onScoreChange(score),
      *   onSpinResolved({isMatch, steps, coinsEarned, tileType, wasLucky}),
-     *   onGameOver(), onReset()
+     *   onGameOver(), onReset(), onShopStatusChange()
      */
     init(hookFns){
       hooks = hookFns || {};
@@ -474,7 +806,15 @@ export const Game = (function(){
     addCoins(amount){
       state.coins += amount;
       renderCoins();
+      renderShopStatus();
     },
     isGameOver(){ return state.gameOver; },
+    buyItem(itemId, options){ return buyItem(itemId, options); },
+    getShopPurchaseInfo(itemId){ return getShopPurchaseInfo(itemId); },
+    getShopState(){ return { ...state.shop }; },
+    /** main.js側がFirestore(shopItems)を購読して現在の商品一覧を渡すためのAPI */
+    setShopCatalog(items){
+      state.shopCatalog = Array.isArray(items) ? items : [];
+    },
   };
 })();

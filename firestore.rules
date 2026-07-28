@@ -77,6 +77,17 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------
+    // shopItems/{itemId} — ショップアイテムの定義（管理者がadmin.htmlから編集）
+    //   name/desc/icon/cost/spins/effectType/enabled/order を持つ。
+    //   全員が商品一覧としてreadできる必要があり、書き込みは管理者のみ。
+    //   購入結果（プレイヤーの残り効果）はブラウザ内メモリのみで保持しFirestoreには保存しない。
+    // ---------------------------------------------------------
+    match /shopItems/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ---------------------------------------------------------
     // admins/{uid} — 管理者フラグ（Firebaseコンソールから手動作成のみ）
     // ---------------------------------------------------------
     match /admins/{uid} {
