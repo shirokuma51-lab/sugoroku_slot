@@ -18,6 +18,6 @@ export const firebaseConfig = {
   authDomain: "sugoroku-slot.firebaseapp.com",
   projectId: "sugoroku-slot",
   storageBucket: "sugoroku-slot.firebasestorage.app",
-  messagingSenderId: 1020381315159"",
+  messagingSenderId:"1020381315159",
   appId: "1:1020381315159:web:1a435baf8811f17573e312",
 };
