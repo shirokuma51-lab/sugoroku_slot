@@ -14,10 +14,10 @@
 // ============================================================
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyBQtQGL97fprzWAzsTJXbJhh4J79JNqC4A",
-  authDomain: "sugoroku-slot.firebaseapp.com",
-  projectId: "sugoroku-slot",
-  storageBucket: "sugoroku-slot.firebasestorage.app",
-  messagingSenderId:"1020381315159",
-  appId: "1:1020381315159:web:1a435baf8811f17573e312",
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID",
 };
