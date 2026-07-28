@@ -15,7 +15,6 @@ import {
   ensureGlobalStats, recordNewPlayer, recordPlayStart, recordSpinResult,
 } from './statistics.js';
 import { Game } from './game.js';
-import { subscribeShopCatalog } from './shop.js';
 import { openModal, closeModal, showToast, escapeHtml } from './ui.js';
 import { showAchievementEffect } from './effects.js';
 import { Sound } from './sound.js';
@@ -43,24 +42,15 @@ async function bootstrap(){
   wireProfileModal();
   wireRankingModal();
   wireAikotobaModal();
-  wireShopModal();
   wireResetButton();
 
   Game.init({
     onScoreChange: onGameScoreChange,
     onSpinResolved: onGameSpinResolved,
-    onCoinsChange(){ renderShopList(lastShopCatalog); },
-    onShopStatusChange(){ renderShopList(lastShopCatalog); },
     onGameOver(){ /* 現状追加処理なし（拡張ポイント） */ },
     onReset(){ recordPlayStart(currentUid); },
   });
   gameReady = true;
-
-  shopUnsub = subscribeShopCatalog((list)=>{
-    lastShopCatalog = list;
-    Game.setShopCatalog(list.filter(i=>i.enabled));
-    renderShopList(list);
-  });
 
   // あいことば由来の称号(titles/{id})を含む「称号名の解決」を常に最新に保つ。
   // 更新が来るたびに、称号名を表示している箇所を再描画する。
@@ -258,57 +248,6 @@ function wireRankingModal(){
     if(!rankingUnsub) rankingUnsub = subscribeRanking((list)=>{ lastRankingList = list; renderRankingList(list); });
   });
   if(closeBtn) closeBtn.addEventListener('click', ()=>{ Sound.click(); closeModal('rankingModal'); });
-}
-
-/* ============================================================
-   ショップ（商品構成・価格はFirestore(shopItems)から購読。管理画面で変更可能）
-============================================================ */
-let shopUnsub = null;
-let lastShopCatalog = [];
-
-function wireShopModal(){
-  const openBtn = document.getElementById('shopBtn');
-  const closeBtn = document.getElementById('shopCloseBtn');
-  if(openBtn) openBtn.addEventListener('click', ()=>{ Sound.click(); openModal('shopModal'); });
-  if(closeBtn) closeBtn.addEventListener('click', ()=>{ Sound.click(); closeModal('shopModal'); });
-
-  // ボタンは商品ごとに動的生成されるため、コンテナに1つだけイベント委譲で登録する
-  const list = document.getElementById('shopItemList');
-  if(list){
-    list.addEventListener('click', (e)=>{
-      const btn = e.target.closest('.shop-buy-btn');
-      if(!btn || btn.disabled) return;
-      const itemId = btn.dataset.itemId;
-      const ok = Game.buyItem(itemId);
-      if(ok){
-        Sound.passwordSuccess();
-        showToast('アイテムを購入しました！', { title:'🛒 購入完了', variant:'success' });
-      } else {
-        Sound.trapHit();
-        showToast('コインが足りません', { title:'🛒 購入失敗', variant:'error' });
-      }
-    });
-  }
-}
-
-function renderShopList(list){
-  const container = document.getElementById('shopItemList');
-  if(!container) return;
-  const enabledItems = (list || []).filter(i=>i.enabled);
-  const coins = Game.getCoins ? Game.getCoins() : 0;
-
-  container.innerHTML = enabledItems.map(item=>`
-    <div class="shop-item">
-      <div class="shop-item-icon">${item.iconType==='image' && item.iconImage ? `<img src="${item.iconImage}" alt="" style="width:100%;height:100%;object-fit:contain;">` : escapeHtml(item.icon || '🎁')}</div>
-      <div class="shop-item-body">
-        <div class="shop-item-name">${escapeHtml(item.name || '')}
-          ${item.effectType==='skullGuard' && item.guardChance!=null ? `<span class="shop-item-chance">成功率${item.guardChance}%</span>` : ''}
-        </div>
-        <div class="shop-item-desc">${escapeHtml(item.desc || '')}</div>
-      </div>
-      <button class="shop-buy-btn" data-item-id="${item.id}" ${coins < item.cost ? 'disabled' : ''}>${item.cost}<span class="coin-icon-sm"></span></button>
-    </div>
-  `).join('') || '<div class="ranking-empty">現在購入できるアイテムはありません</div>';
 }
 
 function renderRankingList(list){
