@@ -38,6 +38,8 @@
       <button class="admin-tab-btn" data-tab="ranking">ランキング</button>
       <button class="admin-tab-btn" data-tab="password">あいことば管理</button>
       <button class="admin-tab-btn" data-tab="shop">ショップ管理</button>
+      <button class="admin-tab-btn" data-tab="monsters">モンスター管理</button>
+      <button class="admin-tab-btn" data-tab="characters">キャラクター画像</button>
     </div>
 
     <!-- 統計タブ -->
@@ -201,6 +203,109 @@
             <button type="button" class="primary-btn" id="shopFormCancelBtn" style="background:#ccc; color:#333;">キャンセル</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- モンスター管理タブ -->
+    <div data-tab-panel="monsters" style="display:none;">
+      <div class="field-hint" style="margin-bottom:14px;">
+        マスに出現するモンスターの種類・HP・討伐ボーナス・見た目を管理できます。「有効」なモンスターだけが実際にモンスターマスへランダムに出現します。
+      </div>
+      <button class="primary-btn" id="monsterSeedBtn" style="margin-bottom:10px; background:#e6f0ff; color:var(--blue-dark);">初期モンスター10種を投入する（未登録の場合のみ）</button>
+      <button class="primary-btn" id="monsterAddBtn" style="margin-bottom:14px;">＋ モンスターを追加</button>
+      <div id="monsterAdminList"></div>
+
+      <div id="monsterFormPanel" style="display:none; margin-top:16px; border-top:2px solid #dbe9fb; padding-top:14px;">
+        <h3 id="monsterFormTitle" style="color:var(--blue-dark);">モンスター追加</h3>
+        <form id="monsterForm">
+          <div class="field-group">
+            <label>見た目</label>
+            <div class="icon-mode-tabs">
+              <button type="button" class="icon-mode-tab active" id="monsterIconModeEmojiBtn">絵文字</button>
+              <button type="button" class="icon-mode-tab" id="monsterIconModeImageBtn">画像</button>
+            </div>
+
+            <div id="monsterIconEmojiPanel">
+              <input type="text" id="monsterIcon" maxlength="4" placeholder="👾">
+              <div class="field-group" style="margin-top:8px;">
+                <label>色相回転（見た目のバリエーション。0〜360）</label>
+                <input type="number" id="monsterHueRotate" min="0" max="360" value="0">
+              </div>
+            </div>
+
+            <div id="monsterIconImagePanel" style="display:none;">
+              <div class="icon-dropzone" id="monsterIconDropzone">
+                <img id="monsterIconImagePreview" style="display:none;">
+                <div id="monsterIconDropzoneHint">
+                  画像をドラッグ&ドロップ<br>
+                  <span style="font-size:11px; opacity:.7;">またはタップして選択（PNG / JPG / WebP）</span>
+                </div>
+              </div>
+              <input type="file" id="monsterIconFile" accept="image/png,image/jpeg,image/webp" style="display:none;">
+              <div class="field-hint" id="monsterIconImageError" style="color:#c0392b; display:none;"></div>
+            </div>
+          </div>
+          <div class="field-group">
+            <label>モンスター名</label>
+            <input type="text" id="monsterName" required>
+          </div>
+          <div class="field-group">
+            <label>説明文</label>
+            <input type="text" id="monsterDesc" required>
+          </div>
+          <div class="field-group">
+            <label>HP</label>
+            <input type="number" id="monsterHp" min="1" required>
+          </div>
+          <div class="field-group">
+            <label>討伐ボーナス（コイン、下限〜上限）</label>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input type="number" id="monsterBonusMin" min="0" style="flex:1;">
+              <span>〜</span>
+              <input type="number" id="monsterBonusMax" min="0" style="flex:1;">
+            </div>
+          </div>
+          <div class="field-group">
+            <label>表示順（小さい順に並ぶ）</label>
+            <input type="number" id="monsterOrder" min="0" value="0">
+          </div>
+          <div class="field-group">
+            <label><input type="checkbox" id="monsterEnabled" checked style="width:auto;"> 有効にする（モンスターマスに出現させる）</label>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button type="submit" class="primary-btn">保存</button>
+            <button type="button" class="primary-btn" id="monsterFormCancelBtn" style="background:#ccc; color:#333;">キャンセル</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- キャラクター画像管理タブ -->
+    <div data-tab-panel="characters" style="display:none;">
+      <div class="field-hint" style="margin-bottom:14px;">
+        プレイヤーが選べる男の子/女の子キャラクターの立ち絵を差し替えられます。未設定の場合は標準イラストが使われます。
+      </div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:150px;">
+          <div class="field-group"><label>男の子キャラクター</label></div>
+          <div class="icon-dropzone" id="charBoyDropzone" style="height:140px;">
+            <img id="charBoyPreview" style="display:none; max-height:120px;">
+            <div id="charBoyDropzoneHint">画像をドラッグ&ドロップ<br><span style="font-size:11px; opacity:.7;">またはタップして選択</span></div>
+          </div>
+          <input type="file" id="charBoyFile" accept="image/png,image/jpeg,image/webp" style="display:none;">
+          <div class="field-hint" id="charBoyError" style="color:#c0392b; display:none;"></div>
+          <button type="button" class="primary-btn" id="charBoyResetBtn" style="margin-top:8px; background:#ccc; color:#333;">標準画像に戻す</button>
+        </div>
+        <div style="flex:1; min-width:150px;">
+          <div class="field-group"><label>女の子キャラクター</label></div>
+          <div class="icon-dropzone" id="charGirlDropzone" style="height:140px;">
+            <img id="charGirlPreview" style="display:none; max-height:120px;">
+            <div id="charGirlDropzoneHint">画像をドラッグ&ドロップ<br><span style="font-size:11px; opacity:.7;">またはタップして選択</span></div>
+          </div>
+          <input type="file" id="charGirlFile" accept="image/png,image/jpeg,image/webp" style="display:none;">
+          <div class="field-hint" id="charGirlError" style="color:#c0392b; display:none;"></div>
+          <button type="button" class="primary-btn" id="charGirlResetBtn" style="margin-top:8px; background:#ccc; color:#333;">標準画像に戻す</button>
+        </div>
       </div>
     </div>
   </div>

@@ -5,7 +5,7 @@
 import { ensurePlayerAuth } from './auth.js';
 import {
   ensureProfile, subscribeProfile, updateUsername, updateCurrentTitle,
-  updateBestScoreIfHigher, claimPendingCoins, USERNAME_MAX_LENGTH,
+  updateBestScoreIfHigher, claimPendingCoins, updateCharacter, USERNAME_MAX_LENGTH,
 } from './profile.js';
 import { TITLES, subscribeTitles, getTitleListForDisplay, getTitleName } from './title.js';
 import { ACHIEVEMENTS, checkAndUnlockAchievements } from './achievement.js';
@@ -16,6 +16,8 @@ import {
 } from './statistics.js';
 import { Game } from './game.js';
 import { subscribeShopCatalog } from './shop.js';
+import { subscribeMonsterCatalog } from './monsters.js';
+import { subscribeCharacterImages } from './characters.js';
 import { openModal, closeModal, showToast, escapeHtml } from './ui.js';
 import { showAchievementEffect } from './effects.js';
 import { Sound } from './sound.js';
@@ -37,6 +39,7 @@ async function bootstrap(){
   const { data, isNew } = await ensureProfile(currentUid);
   currentProfile = data;
   if(isNew) await recordNewPlayer();
+  Game.setPlayerCharacter(currentProfile.character || 'boy');
   await recordPlayStart(currentUid);
 
   wireHud();
@@ -60,6 +63,14 @@ async function bootstrap(){
     lastShopCatalog = list;
     Game.setShopCatalog(list.filter(i=>i.enabled));
     renderShopList(list);
+  });
+
+  monsterUnsub = subscribeMonsterCatalog((list)=>{
+    Game.setMonsterCatalog(list);
+  });
+
+  characterImagesUnsub = subscribeCharacterImages(({ boyImage, girlImage })=>{
+    Game.setCharacterImages({ boy: boyImage, girl: girlImage });
   });
 
   // あいことば由来の称号(titles/{id})を含む「称号名の解決」を常に最新に保つ。
@@ -124,6 +135,7 @@ async function onGameSpinResolved(result){
 let achievementCheckInFlight = false;
 async function onProfileSnapshot(profile){
   currentProfile = profile;
+  Game.setPlayerCharacter(profile.character || 'boy');
   refreshProfileModalIfOpen();
 
   // 別タブ/別ページでの引き換え等、ゲーム起動中にpendingCoinsが増えた場合も回収する
@@ -201,6 +213,27 @@ function renderProfileModal(){
     nameInput.maxLength = USERNAME_MAX_LENGTH;
   }
 
+  const characterList = document.getElementById('profileCharacterList');
+  if(characterList){
+    const current = currentProfile.character === 'girl' ? 'girl' : 'boy';
+    characterList.innerHTML = `
+      <button class="character-option ${current==='boy'?'selected':''}" data-character="boy">
+        <img src="assets/img/characters/boy.png" alt="男の子キャラクター"><span class="character-option-label">男の子</span>
+      </button>
+      <button class="character-option ${current==='girl'?'selected':''}" data-character="girl">
+        <img src="assets/img/characters/girl.png" alt="女の子キャラクター"><span class="character-option-label">女の子</span>
+      </button>
+    `;
+    characterList.querySelectorAll('.character-option').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        Sound.click();
+        try{
+          await updateCharacter(currentUid, btn.dataset.character);
+        }catch(e){ showToast(e.message, { variant:'error' }); }
+      });
+    });
+  }
+
   const titleList = document.getElementById('profileTitleList');
   if(titleList){
     const unlocked = currentProfile.unlockedTitles || ['none'];
@@ -265,6 +298,8 @@ function wireRankingModal(){
 ============================================================ */
 let shopUnsub = null;
 let lastShopCatalog = [];
+let monsterUnsub = null;
+let characterImagesUnsub = null;
 let pendingConfirmItemId = null; // 買い替え確認モーダルで「はい」が押されるまで保留中のアイテムID
 
 function wireShopModal(){

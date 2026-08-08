@@ -116,6 +116,92 @@ export function showAchievementEffect(){
   spawnConfetti(rect.left, rect.top, 22, ['#FFD23F','#FFFFFF','#5FD0FF']);
 }
 
+/** キャラクター画像パス（プロフィールで選択した boy/girl に応じて切り替える）。
+ *  管理画面(admin.html)でカスタム画像がアップロードされている場合はそちらを優先する
+ *  （setCharacterImageOverridesで上書き。未設定ならこの標準画像を使う）。 */
+const DEFAULT_CHARACTER_IMAGES = {
+  boy: 'assets/img/characters/boy.png',
+  girl: 'assets/img/characters/girl.png',
+};
+let characterImageOverrides = { boy: null, girl: null };
+
+/** main.js側がFirestore(gameSettings/characters)を購読して呼び出す。dataURL、または未設定ならnullを渡す。 */
+export function setCharacterImageOverrides(map){
+  characterImageOverrides = {
+    boy: map && map.boy ? map.boy : null,
+    girl: map && map.girl ? map.girl : null,
+  };
+}
+
+export function getCharacterImageUrl(key){
+  const k = key === 'girl' ? 'girl' : 'boy';
+  return characterImageOverrides[k] || DEFAULT_CHARACTER_IMAGES[k];
+}
+
+/** モンスターのアイコンをHTML文字列として組み立てる（絵文字 or 画像アップロード、どちらにも対応）。 */
+function monsterIconHtml(opts, sizePx){
+  if(opts.iconType === 'image' && opts.iconImage){
+    return `<img src="${opts.iconImage}" style="width:${sizePx}px;height:${sizePx}px;object-fit:contain;">`;
+  }
+  return `<div class="battle-monster-emoji" style="filter:hue-rotate(${opts.hueRotate||0}deg)">${opts.monsterEmoji||'👾'}</div>`;
+}
+
+/**
+ * モンスターマス到着時の戦闘演出。プレイヤー立ち絵とモンスターを対面させ、
+ * HPバーが被ダメージ分だけ減るアニメーションを見せてから自動で消える。
+ * opts: { playerCharacter, monsterName, monsterEmoji, iconType, iconImage, hueRotate, hpBefore, hpAfter, maxHp,
+ *         damage, defeated, bonus, alreadyCleared }
+ */
+export function showBattleEffect(opts){
+  const overlay = document.createElement('div');
+  overlay.className = 'battle-overlay';
+
+  const playerImg = getCharacterImageUrl(opts.playerCharacter);
+
+  if(opts.alreadyCleared){
+    overlay.innerHTML = `
+      <div class="battle-card">
+        <div class="battle-side battle-player"><img src="${playerImg}" alt=""></div>
+        <div class="battle-vs">探索</div>
+        <div class="battle-side battle-monster"><div class="battle-monster-emoji">🗺️</div></div>
+      </div>
+      <div class="battle-result-text">この場所はすでに探索済み…</div>
+    `;
+  } else {
+    const pctBefore = Math.max(0, Math.round((opts.hpBefore / opts.maxHp) * 100));
+    const pctAfter = Math.max(0, Math.round((opts.hpAfter / opts.maxHp) * 100));
+    overlay.innerHTML = `
+      <div class="battle-card">
+        <div class="battle-side battle-player"><img src="${playerImg}" alt=""></div>
+        <div class="battle-vs">VS</div>
+        <div class="battle-side battle-monster">
+          ${monsterIconHtml(opts, 48)}
+          <div class="battle-monster-name">${opts.monsterName || ''}</div>
+        </div>
+      </div>
+      <div class="battle-hp-track"><div class="battle-hp-fill" id="battleHpFillTmp" style="width:${pctBefore}%"></div></div>
+      <div class="battle-damage-text">-${opts.damage}</div>
+      <div class="battle-result-text">${opts.defeated ? `討伐！ +${opts.bonus}コイン` : ''}</div>
+    `;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(()=>{
+      const fill = overlay.querySelector('#battleHpFillTmp');
+      if(fill) fill.style.width = pctAfter + '%';
+    });
+    if(opts.defeated){
+      setTimeout(()=>{
+        const rect = overlay.querySelector('.battle-monster').getBoundingClientRect();
+        spawnConfetti(rect.left+rect.width/2, rect.top+rect.height/2, 24, ['#FFD23F','#FF5FA2','#8BFF5F','#5FD0FF']);
+      }, 350);
+    }
+    setTimeout(()=>overlay.remove(), 1550);
+    return;
+  }
+
+  document.body.appendChild(overlay);
+  setTimeout(()=>overlay.remove(), 1250);
+}
+
 /** 💀（強制終了シンボル）が出た時の演出 */
 export function showSkullEffect(){
   const app = document.getElementById('app');

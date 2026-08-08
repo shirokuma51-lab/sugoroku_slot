@@ -45,6 +45,7 @@ export async function ensureProfile(uid){
       lastLogin: serverTimestamp(),
       bestScore: 0,
       bestScoreUpdatedAt: serverTimestamp(),
+      character: 'boy', // 'boy' | 'girl'（モンスター戦闘演出で使う立ち絵）
       achievements: [],
       usedPasswords: [],
       pendingCoins: 0, // 別ページ(あいことば等)で獲得し、まだゲーム画面で受け取っていないコイン
@@ -83,6 +84,13 @@ export async function updateUsername(uid, newName){
   if(trimmed.length > USERNAME_MAX_LENGTH) throw new Error(`ユーザーネームは${USERNAME_MAX_LENGTH}文字以内にしてください`);
   await updateDoc(playerRef(uid), { username: trimmed });
   return trimmed;
+}
+
+/** キャラクター（立ち絵）変更。プロフィールでいつでも変更可。 */
+export async function updateCharacter(uid, key){
+  const value = key === 'girl' ? 'girl' : 'boy';
+  await updateDoc(playerRef(uid), { character: value });
+  return value;
 }
 
 /** 称号変更（解除済みの称号のみ選択可） */

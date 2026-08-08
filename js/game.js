@@ -13,9 +13,10 @@ import { Sound } from './sound.js';
 import {
   showFloatPop, flyCoinToHud, spawnConfetti, flashScreen,
   showJudgeBanner, showBonusBanner, showLuckyProcEffect, showTrapEffect,
-  showSkullEffect,
+  showSkullEffect, showBattleEffect, setCharacterImageOverrides, getCharacterImageUrl,
 } from './effects.js';
 import { generateTileEvents, TILE_TYPES, LuckyMeter } from './events.js';
+import { createMonsterInstance } from './monsters.js';
 
 export const SKULL = 'SKULL';
 
@@ -44,6 +45,14 @@ export const CONFIG = {
   skullChance: 0.05,      // 💀許可リールが実際に💀で停止する確率（5%）
   skullTickChance: 0.06,  // 💀許可リールの回転中表示にも演出として💀をたまに混ぜる確率
 
+  // ---- モンスターマス（events.js: TILE_TYPES.MONSTER）----
+  // 到着するたびに固定ダメージ幅で攻撃し、探索ボーナスを獲得。倒すと討伐ボーナスも追加で獲得する。
+  // HPは倒すまでそのゲーム中ずっと引き継がれる（リセットで全回復した新しいモンスターに戻る）。
+  monsterDamageMin: 15,
+  monsterDamageMax: 30,
+  monsterExploreRewardPool: [5, 8, 10, 12, 15], // 倒せなくても毎回もらえる探索ボーナス
+  monsterRespawnChance: 0.5, // 倒した直後に判定。成功で新しいモンスターがそのマスに即座に出現、失敗でそのゲーム中は空き地になる
+
   // ---- ショップのデフォルト（Firestoreにまだ1件も登録されていない時のフォールバック表示用） ----
   // 実際の価格・アイテム構成は管理画面(admin.html)からFirestore(shopItems)を編集して変更できる。
   defaultShopItems: [
@@ -58,6 +67,7 @@ const TILE_TYPE_ICON = {
   [TILE_TYPES.TRAP]: '⚠',
   [TILE_TYPES.BONUS]: '🎁',
   [TILE_TYPES.BONUS10]: '🌈',
+  // MONSTERタイルはバッジではなく専用のミニHP表示(renderMonsterTileBody)を使うためここには含めない
 };
 
 function randomFrom(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
@@ -120,6 +130,9 @@ export const Game = (function(){
       },
     },
     shopCatalog: [], // Firestore(shopItems)から購読した現在の商品一覧（main.jsがsetShopCatalogで注入）
+    monsterCatalog: [], // Firestore(monsters)から購読した現在のモンスター一覧（main.jsがsetMonsterCatalogで注入）
+
+    playerCharacter: 'boy', // 'boy' | 'girl'（main.jsがプロフィールのcharacterフィールドから注入）
   };
 
   const luckyMeter = new LuckyMeter(10);
@@ -190,29 +203,77 @@ export const Game = (function(){
       const num = document.createElement('div');
       num.className = 'tile-num';
       num.textContent = i + 'マス';
-
-      const reward = document.createElement('div');
-      reward.className = 'tile-reward';
-      reward.textContent = (evt.amount >= 0 ? '+' : '') + evt.amount;
-
       tile.appendChild(num);
-      tile.appendChild(reward);
 
-      if(TILE_TYPE_ICON[evt.type]){
-        const badge = document.createElement('div');
-        badge.className = 'tile-badge';
-        badge.textContent = TILE_TYPE_ICON[evt.type];
-        tile.appendChild(badge);
+      if(evt.type === TILE_TYPES.MONSTER){
+        tile.appendChild(buildMonsterTileBody(evt));
+      } else {
+        const reward = document.createElement('div');
+        reward.className = 'tile-reward';
+        reward.textContent = (evt.amount >= 0 ? '+' : '') + evt.amount;
+        tile.appendChild(reward);
+
+        if(TILE_TYPE_ICON[evt.type]){
+          const badge = document.createElement('div');
+          badge.className = 'tile-badge';
+          badge.textContent = TILE_TYPE_ICON[evt.type];
+          tile.appendChild(badge);
+        }
       }
       el.board.appendChild(tile);
     }
+    refreshPlayerToken();
+  }
+
+  /** モンスタータイルの中身（アイコン・名前・ミニHPバー、または討伐済みの空き地表示）を生成する。 */
+  function buildMonsterTileBody(evt){
+    const wrap = document.createElement('div');
+    wrap.className = 'tile-monster-body';
+    if(!evt.monster){
+      wrap.classList.add('cleared');
+      wrap.innerHTML = `<div class="tile-monster-icon">🗺️</div><div class="tile-monster-name">探索済み</div>`;
+      return wrap;
+    }
+    const m = evt.monster;
+    const pct = Math.max(0, Math.round((m.hp / m.maxHp) * 100));
+    const iconHtml = (m.iconType === 'image' && m.iconImage)
+      ? `<img class="tile-monster-icon-img" src="${m.iconImage}" alt="">`
+      : `<div class="tile-monster-icon" style="filter:hue-rotate(${m.hueRotate}deg)">${m.icon}</div>`;
+    wrap.innerHTML = `
+      ${iconHtml}
+      <div class="tile-monster-name">${m.name}</div>
+      <div class="tile-hp-track"><div class="tile-hp-fill" style="width:${pct}%"></div></div>
+      <div class="tile-hp-label">${m.hp}/${m.maxHp}</div>
+    `;
+    return wrap;
+  }
+
+  /** 戦闘解決後、盤面を全部作り直さずに該当マスのモンスター表示だけを更新する。 */
+  function refreshMonsterTileVisual(pos){
+    const tile = document.getElementById('tile-'+pos);
+    if(!tile) return;
+    const old = tile.querySelector('.tile-monster-body');
+    if(old) old.replaceWith(buildMonsterTileBody(state.tileEvents[pos]));
   }
 
   function setCurrentTile(pos){
     document.querySelectorAll('.tile.current').forEach(t=>t.classList.remove('current','player-here'));
     const tile = document.getElementById('tile-'+pos);
     if(tile) tile.classList.add('current','player-here');
+    refreshPlayerToken();
     return tile;
+  }
+
+  /** 現在地マスの上にプレイヤーの立ち絵トークンを表示する（待機中も常にふわふわ揺れる待機モーション付き）。 */
+  function refreshPlayerToken(){
+    document.querySelectorAll('.board-player-token').forEach(n=>n.remove());
+    const tile = document.getElementById('tile-'+state.position);
+    if(!tile) return;
+    const img = document.createElement('img');
+    img.className = 'board-player-token';
+    img.src = getCharacterImageUrl(state.playerCharacter);
+    img.alt = '';
+    tile.appendChild(img);
   }
 
   function renderShopStatus(){
@@ -670,6 +731,30 @@ export const Game = (function(){
     stepOnce();
   }
 
+  /** モンスターマスに到着した時の戦闘解決。ダメージを与え、倒せば討伐ボーナスも加算する。
+   *  戻り値のcoinsEarnedをevt.amountに反映してから既存の共通処理（コイン増減・スコア計算）に合流させる。 */
+  function resolveMonsterEncounter(evt){
+    if(!evt.monster){
+      // 既に討伐済みで再出現しなかったマス（空き地）→ 通常マス相当の小さな探索ボーナスのみ
+      return { coinsEarned: randomFrom(CONFIG.monsterExploreRewardPool), defeated:false, alreadyCleared:true, damage:0, monster:null };
+    }
+    const m = evt.monster;
+    const hpBefore = m.hp;
+    const damage = CONFIG.monsterDamageMin + Math.floor(Math.random()*(CONFIG.monsterDamageMax - CONFIG.monsterDamageMin + 1));
+    m.hp = Math.max(0, m.hp - damage);
+    const defeated = m.hp <= 0;
+
+    let coinsEarned = randomFrom(CONFIG.monsterExploreRewardPool);
+    let bonus = 0;
+    if(defeated){
+      bonus = m.bonusMin + Math.floor(Math.random()*(m.bonusMax - m.bonusMin + 1));
+      coinsEarned += bonus;
+      // 倒した直後に再出現するかどうかを判定（成功＝新しいモンスターが即座にそのマスへ）
+      evt.monster = Math.random() < CONFIG.monsterRespawnChance ? createMonsterInstance(state.monsterCatalog) : null;
+    }
+    return { coinsEarned, defeated, alreadyCleared:false, damage, hpBefore, hpAfter: Math.max(0, hpBefore-damage), monster:m, bonus, monsterName: m.name };
+  }
+
   function onTileArrive(){
     const pos = state.position;
     const evt = state.tileEvents[pos];
@@ -678,6 +763,24 @@ export const Game = (function(){
     if(tile){
       tile.classList.add('step-glow');
       setTimeout(()=>tile.classList.remove('step-glow'), 400);
+    }
+
+    let battleInfo = null;
+    if(evt.type === TILE_TYPES.MONSTER){
+      battleInfo = resolveMonsterEncounter(evt);
+      evt.amount = battleInfo.coinsEarned;
+      showBattleEffect({
+        playerCharacter: state.playerCharacter,
+        monsterName: battleInfo.monsterName || null,
+        monsterEmoji: battleInfo.monster ? battleInfo.monster.icon : '🗺️',
+        iconType: battleInfo.monster ? battleInfo.monster.iconType : 'emoji',
+        iconImage: battleInfo.monster ? battleInfo.monster.iconImage : null,
+        hueRotate: battleInfo.monster ? battleInfo.monster.hueRotate : 0,
+        hpBefore: battleInfo.hpBefore, hpAfter: battleInfo.hpAfter, maxHp: battleInfo.monster ? battleInfo.monster.maxHp : 0,
+        damage: battleInfo.damage, defeated: battleInfo.defeated, bonus: battleInfo.bonus,
+        alreadyCleared: battleInfo.alreadyCleared,
+      });
+      refreshMonsterTileVisual(pos);
     }
 
     // コイン倍率アイテムが有効なら、実際に増減するコイン数に倍率をかける（マイナスのTrapも対象）
@@ -727,7 +830,7 @@ export const Game = (function(){
 
     // 呼び出し元（統計・実績トラッキング等）には実際に増減したコイン数を渡す
     // （コイン倍率アイテムが有効な場合、マス本来の数値とは異なるため）
-    return { ...evt, amount: coinDelta };
+    return { ...evt, amount: coinDelta, battle: battleInfo };
   }
 
   function triggerGameOver(reason){
@@ -758,7 +861,7 @@ export const Game = (function(){
     state.shop.active.scoreBoost = null;
     state.shop.active.coinBoost = null;
     state.shop.active.skullGuard = null;
-    state.tileEvents = generateTileEvents(CONFIG.boardSize, CONFIG.bonusTile, CONFIG.bonusAmount);
+    state.tileEvents = generateTileEvents(CONFIG.boardSize, CONFIG.bonusTile, CONFIG.bonusAmount, state.monsterCatalog);
     luckyMeter.reset();
     state.reels.forEach(r=>{
       clearInterval(r.intervalId);
@@ -815,6 +918,20 @@ export const Game = (function(){
     /** main.js側がFirestore(shopItems)を購読して現在の商品一覧を渡すためのAPI */
     setShopCatalog(items){
       state.shopCatalog = Array.isArray(items) ? items : [];
+    },
+    /** main.js側がFirestore(monsters)を購読して現在のモンスター一覧を渡すためのAPI */
+    setMonsterCatalog(items){
+      state.monsterCatalog = Array.isArray(items) ? items : [];
+    },
+    /** main.js側がプロフィールのcharacterフィールド('boy'|'girl')を渡すためのAPI。戦闘演出に使う。 */
+    setPlayerCharacter(key){
+      state.playerCharacter = (key === 'girl') ? 'girl' : 'boy';
+      refreshPlayerToken();
+    },
+    /** main.js側がFirestore(gameSettings/characters)を購読して、キャラクター画像の上書きURLを渡すためのAPI */
+    setCharacterImages(map){
+      setCharacterImageOverrides(map || {});
+      refreshPlayerToken();
     },
   };
 })();

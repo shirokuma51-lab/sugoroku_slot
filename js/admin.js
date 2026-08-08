@@ -22,6 +22,11 @@ import {
   subscribeShopCatalog, createShopItem, updateShopItem, deleteShopItem,
   seedDefaultShopItemsIfEmpty, CATEGORIES,
 } from './shop.js';
+import {
+  subscribeMonsterCatalog, createMonster, updateMonster, deleteMonster,
+  seedDefaultMonstersIfEmpty,
+} from './monsters.js';
+import { subscribeCharacterImages, updateCharacterImage } from './characters.js';
 import { setupTabs, showToast, escapeHtml } from './ui.js';
 import { getTitleName, subscribeTitles } from './title.js';
 
@@ -489,6 +494,279 @@ async function onShopFormSubmit(e){
   }
 }
 
+/* ============================================================
+   汎用：画像ドロップゾーン（モンスター画像・キャラクター画像で共用）
+============================================================ */
+function wireImageDropzone({ dropzoneId, fileInputId, onFile }){
+  const dropzone = document.getElementById(dropzoneId);
+  const fileInput = document.getElementById(fileInputId);
+  dropzone.addEventListener('click', ()=> fileInput.click());
+  fileInput.addEventListener('change', ()=>{
+    if(fileInput.files && fileInput.files[0]) onFile(fileInput.files[0]);
+  });
+  ['dragenter','dragover'].forEach(evt=>{
+    dropzone.addEventListener(evt, (e)=>{ e.preventDefault(); e.stopPropagation(); dropzone.classList.add('dragover'); });
+  });
+  ['dragleave','drop'].forEach(evt=>{
+    dropzone.addEventListener(evt, (e)=>{ e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('dragover'); });
+  });
+  dropzone.addEventListener('drop', (e)=>{
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if(file) onFile(file);
+  });
+}
+
+function readAndResizeImage(file, maxDim, { onError } = {}){
+  return new Promise((resolve)=>{
+    if(!ACCEPTED_ICON_TYPES.includes(file.type)){
+      if(onError) onError('対応していないファイル形式です（PNG / JPG / WebPのみ）');
+      resolve(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = ()=>{ if(onError) onError('画像の読み込みに失敗しました'); resolve(null); };
+    reader.onload = ()=>{
+      resizeImageDataUrl(reader.result, maxDim)
+        .then(resolve)
+        .catch(()=>{ if(onError) onError('画像の処理に失敗しました'); resolve(null); });
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ============================================================
+   ダッシュボード：モンスター管理
+============================================================ */
+let lastMonsterList = [];
+let editingMonsterId = null;
+let monsterIconMode = 'emoji'; // 'emoji' | 'image'
+let currentMonsterIconImageDataUrl = null;
+const MONSTER_ICON_MAX_DIM = 160;
+
+function initMonsterPanel(){
+  const unsub = subscribeMonsterCatalog((list)=>{
+    lastMonsterList = list;
+    renderMonsterAdminList(list);
+  });
+  unsubscribers.push(unsub);
+
+  document.getElementById('monsterAddBtn').addEventListener('click', ()=> openMonsterForm(null));
+  document.getElementById('monsterFormCancelBtn').addEventListener('click', closeMonsterForm);
+  document.getElementById('monsterForm').addEventListener('submit', onMonsterFormSubmit);
+  document.getElementById('monsterSeedBtn').addEventListener('click', async ()=>{
+    const created = await seedDefaultMonstersIfEmpty();
+    showToast(created ? '初期モンスターを追加しました' : 'すでにモンスターが登録されているためスキップしました');
+  });
+
+  document.getElementById('monsterIconModeEmojiBtn').addEventListener('click', ()=> setMonsterIconMode('emoji'));
+  document.getElementById('monsterIconModeImageBtn').addEventListener('click', ()=> setMonsterIconMode('image'));
+
+  wireImageDropzone({
+    dropzoneId: 'monsterIconDropzone', fileInputId: 'monsterIconFile',
+    onFile: async (file)=>{
+      showMonsterIconError('');
+      const dataUrl = await readAndResizeImage(file, MONSTER_ICON_MAX_DIM, { onError: showMonsterIconError });
+      if(!dataUrl) return;
+      currentMonsterIconImageDataUrl = dataUrl;
+      const preview = document.getElementById('monsterIconImagePreview');
+      preview.src = dataUrl;
+      preview.style.display = '';
+      document.getElementById('monsterIconDropzoneHint').style.display = 'none';
+    },
+  });
+}
+
+function setMonsterIconMode(mode){
+  monsterIconMode = mode;
+  document.getElementById('monsterIconModeEmojiBtn').classList.toggle('active', mode==='emoji');
+  document.getElementById('monsterIconModeImageBtn').classList.toggle('active', mode==='image');
+  document.getElementById('monsterIconEmojiPanel').style.display = mode==='emoji' ? '' : 'none';
+  document.getElementById('monsterIconImagePanel').style.display = mode==='image' ? '' : 'none';
+}
+
+function showMonsterIconError(msg){
+  const el = document.getElementById('monsterIconImageError');
+  el.textContent = msg;
+  el.style.display = msg ? '' : 'none';
+}
+
+function resetMonsterIconImagePanel(){
+  currentMonsterIconImageDataUrl = null;
+  const preview = document.getElementById('monsterIconImagePreview');
+  preview.src = '';
+  preview.style.display = 'none';
+  document.getElementById('monsterIconDropzoneHint').style.display = '';
+  document.getElementById('monsterIconFile').value = '';
+  showMonsterIconError('');
+}
+
+function renderMonsterAdminList(list){
+  const container = document.getElementById('monsterAdminList');
+  container.innerHTML = list.map(m=>{
+    const iconHtml = m.iconType==='image' && m.iconImage
+      ? `<img src="${m.iconImage}" style="width:20px;height:20px;object-fit:contain;vertical-align:middle;border-radius:4px;">`
+      : escapeHtml(m.icon||'');
+    return `
+    <div class="password-row" data-id="${m.id}">
+      <div class="password-row-main">
+        <strong>${iconHtml} ${escapeHtml(m.name||'')}</strong>
+        <span>HP${m.hp} / 討伐+${m.bonusMin}〜${m.bonusMax}コイン</span>
+        <span class="${m.enabled ? 'badge-active':'badge-inactive'}">${m.enabled ? '有効':'無効'}</span>
+      </div>
+      <div class="password-row-actions">
+        <button class="monster-edit-btn">編集</button>
+        <button class="monster-delete-btn">削除</button>
+      </div>
+    </div>
+  `;
+  }).join('') || '<div class="ranking-empty">登録されたモンスターはありません</div>';
+
+  container.querySelectorAll('.password-row').forEach(row=>{
+    const id = row.dataset.id;
+    const item = list.find(i=>i.id===id);
+    row.querySelector('.monster-edit-btn').addEventListener('click', ()=> openMonsterForm(item));
+    row.querySelector('.monster-delete-btn').addEventListener('click', async ()=>{
+      if(!confirm(`「${item.name}」を削除しますか？`)) return;
+      await deleteMonster(id);
+      showToast('削除しました');
+    });
+  });
+}
+
+function openMonsterForm(item){
+  editingMonsterId = item ? item.id : null;
+  document.getElementById('monsterFormTitle').textContent = item ? 'モンスター編集' : 'モンスター追加';
+  document.getElementById('monsterName').value = item ? item.name : '';
+  document.getElementById('monsterDesc').value = item ? item.desc : '';
+  document.getElementById('monsterHp').value = item ? item.hp : 50;
+  document.getElementById('monsterBonusMin').value = item ? item.bonusMin : 20;
+  document.getElementById('monsterBonusMax').value = item ? item.bonusMax : 40;
+  document.getElementById('monsterHueRotate').value = item ? (item.hueRotate||0) : 0;
+  document.getElementById('monsterOrder').value = item ? (item.order||0) : lastMonsterList.length;
+  document.getElementById('monsterEnabled').checked = item ? !!item.enabled : true;
+
+  resetMonsterIconImagePanel();
+  if(item && item.iconType === 'image' && item.iconImage){
+    setMonsterIconMode('image');
+    currentMonsterIconImageDataUrl = item.iconImage;
+    const preview = document.getElementById('monsterIconImagePreview');
+    preview.src = item.iconImage;
+    preview.style.display = '';
+    document.getElementById('monsterIconDropzoneHint').style.display = 'none';
+  } else {
+    setMonsterIconMode('emoji');
+    document.getElementById('monsterIcon').value = item ? (item.icon || '👾') : '👾';
+  }
+
+  document.getElementById('monsterFormPanel').style.display = '';
+}
+
+function closeMonsterForm(){
+  document.getElementById('monsterFormPanel').style.display = 'none';
+  editingMonsterId = null;
+  resetMonsterIconImagePanel();
+}
+
+async function onMonsterFormSubmit(e){
+  e.preventDefault();
+
+  if(monsterIconMode === 'image' && !currentMonsterIconImageDataUrl){
+    showMonsterIconError('画像を選択してください（または「絵文字」タブに切り替えてください）');
+    return;
+  }
+
+  const payload = {
+    name: document.getElementById('monsterName').value,
+    desc: document.getElementById('monsterDesc').value,
+    hp: document.getElementById('monsterHp').value,
+    bonusMin: document.getElementById('monsterBonusMin').value,
+    bonusMax: document.getElementById('monsterBonusMax').value,
+    hueRotate: document.getElementById('monsterHueRotate').value,
+    order: document.getElementById('monsterOrder').value,
+    enabled: document.getElementById('monsterEnabled').checked,
+    iconType: monsterIconMode,
+    icon: monsterIconMode === 'emoji' ? document.getElementById('monsterIcon').value : '',
+    iconImage: monsterIconMode === 'image' ? currentMonsterIconImageDataUrl : null,
+  };
+
+  try{
+    if(editingMonsterId){
+      await updateMonster(editingMonsterId, payload);
+      showToast('更新しました');
+    } else {
+      await createMonster(payload);
+      showToast('追加しました');
+    }
+    closeMonsterForm();
+  }catch(err){
+    showToast('保存に失敗しました: ' + err.message, { variant:'error' });
+  }
+}
+
+/* ============================================================
+   ダッシュボード：キャラクター画像管理
+============================================================ */
+const CHARACTER_IMAGE_MAX_DIM = 480;
+let lastCharacterImages = { boyImage:null, girlImage:null };
+
+function initCharacterPanel(){
+  const unsub = subscribeCharacterImages((data)=>{
+    lastCharacterImages = data;
+    renderCharacterPreview('boy', data.boyImage);
+    renderCharacterPreview('girl', data.girlImage);
+  });
+  unsubscribers.push(unsub);
+
+  wireImageDropzone({
+    dropzoneId: 'charBoyDropzone', fileInputId: 'charBoyFile',
+    onFile: (file)=> handleCharacterFile('boy', file),
+  });
+  wireImageDropzone({
+    dropzoneId: 'charGirlDropzone', fileInputId: 'charGirlFile',
+    onFile: (file)=> handleCharacterFile('girl', file),
+  });
+  document.getElementById('charBoyResetBtn').addEventListener('click', async ()=>{
+    await updateCharacterImage('boy', null);
+    showToast('男の子キャラクターを標準画像に戻しました');
+  });
+  document.getElementById('charGirlResetBtn').addEventListener('click', async ()=>{
+    await updateCharacterImage('girl', null);
+    showToast('女の子キャラクターを標準画像に戻しました');
+  });
+}
+
+function charErrorEl(key){ return document.getElementById(key==='boy' ? 'charBoyError' : 'charGirlError'); }
+
+async function handleCharacterFile(key, file){
+  const errEl = charErrorEl(key);
+  errEl.style.display = 'none';
+  const dataUrl = await readAndResizeImage(file, CHARACTER_IMAGE_MAX_DIM, {
+    onError: (msg)=>{ errEl.textContent = msg; errEl.style.display = ''; },
+  });
+  if(!dataUrl) return;
+  try{
+    await updateCharacterImage(key, dataUrl);
+    showToast((key==='boy' ? '男の子':'女の子') + 'キャラクターを更新しました');
+  }catch(err){
+    errEl.textContent = '保存に失敗しました: ' + err.message;
+    errEl.style.display = '';
+  }
+}
+
+function renderCharacterPreview(key, dataUrl){
+  const preview = document.getElementById(key==='boy' ? 'charBoyPreview' : 'charGirlPreview');
+  const hint = document.getElementById(key==='boy' ? 'charBoyDropzoneHint' : 'charGirlDropzoneHint');
+  if(dataUrl){
+    preview.src = dataUrl;
+    preview.style.display = '';
+    hint.style.display = 'none';
+  } else {
+    preview.src = '';
+    preview.style.display = 'none';
+    hint.style.display = '';
+  }
+}
+
 /* ============================================================ */
 function initDashboard(){
   setupTabs('.admin-tab-btn');
@@ -500,6 +778,8 @@ function initDashboard(){
   initRankingPanel();
   initPasswordPanel();
   initShopPanel();
+  initMonsterPanel();
+  initCharacterPanel();
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{

@@ -88,6 +88,17 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------
+    // monsters/{monsterId} — モンスターマスに出現するモンスターの定義（管理者がadmin.htmlから編集）
+    //   name/desc/iconType/icon/iconImage/hueRotate/hp/bonusMin/bonusMax/enabled/order を持つ。
+    //   全員がモンスター一覧としてreadできる必要があり、書き込みは管理者のみ。
+    //   各モンスターの戦闘中HP自体はプレイヤーのブラウザ内メモリのみで保持しFirestoreには保存しない。
+    // ---------------------------------------------------------
+    match /monsters/{monsterId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ---------------------------------------------------------
     // admins/{uid} — 管理者フラグ（Firebaseコンソールから手動作成のみ）
     // ---------------------------------------------------------
     match /admins/{uid} {
